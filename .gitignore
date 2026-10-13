@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.reading-packet/
+output/
+tmp/
+*.log
