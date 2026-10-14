@@ -94,4 +94,8 @@ The private source repository is [pianojay/ordv](https://github.com/pianojay/ord
 - [Style licensing and attribution review](docs/style-licensing.md)
 - [Reliability findings beyond page layout](docs/reliability-audit.md)
 
-Agent skill/MCP/plugin integrations and the VS Code styling preset are planned. Follow-up work is tracked in [GitHub issues](https://github.com/pianojay/ordv/issues). The four original core defects have regression fixes; broader discovery, packaging, and reading controls remain separate work. Imported private lessons and generated PDFs are excluded from Git.
+Agent skill/MCP/plugin integrations are planned. The standalone VS Code styling preset is available by default. Follow-up work is tracked in [GitHub issues](https://github.com/pianojay/ordv/issues). The four original core defects have regression fixes; broader discovery, packaging, and reading controls remain separate work. Imported private lessons and generated PDFs are excluded from Git.
+
+## Default reading style
+
+The standalone default uses pinned VS Code and yzane Markdown PDF CSS, with the original highlight.js theme. Full third-party notices accompany the source and rendered HTML. See [licensing and compatibility](docs/style-licensing.md) for print-setting differences and redistribution requirements. Run `npm run test:style` for the layout fixture.

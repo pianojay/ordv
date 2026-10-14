@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import sanitize from 'sanitize-html';
+import { readingStyle } from './style.js';
 import hljs from 'highlight.js';
 import { parser, escape } from './markdown.js';
 import { flatten, validatePlan, type Plan, type Document, type ReadingNode } from './model.js';
@@ -25,20 +26,6 @@ function resourcesForRender() {
     return { katex: css, mermaid: await fs.readFile(mermaidPath, 'utf8') };
   })();
 }
-const css = `
-*{box-sizing:border-box}body{margin:0;font:11pt/1.65 "Segoe UI","Malgun Gothic",Arial,sans-serif;color:#263344;background:white}
-h1,h2,h3,h4,h5,h6{color:#152e3b;line-height:1.25;break-after:avoid}h1{font-size:25pt}h2{font-size:19pt}h3{font-size:15pt}
-a{color:#096f70;text-decoration:none}a:hover{text-decoration:underline}.heading-link{color:inherit}.source{font-size:8pt;color:#61747d;overflow-wrap:anywhere}
-pre{padding:14px;background:#f2f5f6;border:1px solid #e3eaec;white-space:pre-wrap;overflow-wrap:anywhere;font-size:9pt;break-inside:avoid}code{font-family:Consolas,monospace}
-table{border-collapse:collapse;width:100%;font-size:10pt}th,td{padding:8px;border:1px solid #d9e2e5;text-align:left}thead{display:table-header-group}tr{break-inside:avoid}
-img,svg{max-width:100%;height:auto}blockquote{margin-left:0;padding-left:16px;border-left:3px solid #a7c8c4;color:#52646c}
-.doc,.navigation,.graph-page{break-before:page}.doc:first-child,.navigation:first-child{break-before:auto}.section-label{font-size:12pt;color:#54717b;margin-top:24px}
-.toc ul{list-style:none;padding-left:18px}.toc>ul{padding-left:0}.toc li{margin:6px 0}.toc .heading-entry{font-size:9pt;color:#52646c}.toc h1{margin-bottom:24px}
-.missing,.reference-note{color:#97501c;font-size:9pt}.mermaid{display:flex;justify-content:center;break-inside:avoid}.mermaid svg{max-height:550px}.hljs-keyword,.hljs-selector-tag{color:#8c369a}.hljs-string,.hljs-attr{color:#287a52}.hljs-number{color:#a05519}
-.katex-display{overflow:visible}eqn{display:block;text-align:center;margin:1em 0}eq{display:inline}section.doc{overflow-wrap:break-word}
-@media screen{body{max-width:850px;margin:auto;padding:36px}.doc{border-top:1px solid #dfe8e9;margin-top:40px;padding-top:24px}}
-@media print{.screen-only{display:none}a{overflow-wrap:anywhere}}
-`;
 function documentHTML(doc: Document, plan: Plan, title = doc.title, sections: string[] = []): string {
   const selected = new Set(flatten(plan.tree));
   const md = parser(plan.settings.math);
@@ -130,6 +117,7 @@ export async function renderHTML(value: Plan, onlyDocument?: string, navigationO
   const byId = new Map(plan.documents.map(d => [d.id, d]));
   for (const id of selected) if (!byId.get(id)?.available) throw new Error(`Selected document unavailable: ${id}`);
   const resources = await resourcesForRender();
+  const css = await readingStyle();
   function renderTree(nodes: ReadingNode[], sections: string[] = []): string {
     return nodes.map(n => `${n.documentId ? documentHTML(byId.get(n.documentId)!, plan, n.title, sections) : ''}${renderTree(n.children, n.documentId ? sections : [...sections, n.title])}`).join('');
   }
