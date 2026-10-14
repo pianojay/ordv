@@ -106,7 +106,7 @@ export async function assemblePDF(parts: Uint8Array[]): Promise<Uint8Array> {
   const dests = output.context.obj({});
   for (const [key, value] of globalNames) dests.set(PDFName.of(encodeURIComponent(key)), value);
   output.catalog.set(PDFName.of('Dests'), dests);
-  output.setTitle('Markdown Reading Packet'); output.setProducer('Markdown Reading Packet');
+  output.setTitle('ordv reading edition'); output.setProducer('ordv');
   return output.save();
 }
 export async function exportPDF(value: Plan): Promise<{ bytes: Uint8Array; warnings: string[] }> {

@@ -17,8 +17,10 @@ try {
   const count = () => page.$eval('.pill', el => el.textContent);
   assert.equal(await count(), '5 selected');
   await page.click('button[aria-label="Include A disconnected thought"]');
+  await page.waitForFunction(() => document.querySelector('.pill')?.textContent === '6 selected');
   assert.equal(await count(), '6 selected');
   await page.click('button[aria-label="Exclude A disconnected thought"]');
+  await page.waitForFunction(() => document.querySelector('.pill')?.textContent === '5 selected');
   assert.equal(await count(), '5 selected');
   await page.type('input[aria-label="New section name"]', 'Background');
   await page.click('.add-section button');

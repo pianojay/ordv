@@ -7,7 +7,7 @@ import { validatePlan } from './core/model.js';
 import { exportPDF } from './core/export.js';
 import { serve } from './server.js';
 
-const command = new Command().name('packet').description('Turn linked Markdown into printable reading packets').version('0.1.0');
+const command = new Command().name('ordv').description('Turn linked Markdown into printable reading packets').version('0.1.0');
 command.command('discover').argument('<source>', 'Markdown file, directory, or public raw Markdown URL').option('-o, --output <file>', 'Save a snapshot reading plan').option('--refresh', 'Refresh remote cached content').action(async (input, opts) => {
   const plan = await discover(input, { refresh: !!opts.refresh });
   const json = JSON.stringify(plan, null, 2);
@@ -19,7 +19,7 @@ command.command('serve').alias('open').argument('[source]', 'Optional initial do
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid port');
   const plan = opts.plan ? validatePlan(JSON.parse(await fs.readFile(opts.plan, 'utf8'))) : undefined;
   const { url } = await serve({ port, input, plan, production: !!opts.production });
-  console.log(`Reading Packet editor: ${url}\nPress Ctrl+C to stop.`);
+  console.log(`ordv editor: ${url}\nPress Ctrl+C to stop.`);
 });
 command.command('export').argument('<plan>', 'Saved JSON reading plan').requiredOption('-o, --output <file>', 'Output PDF').option('--mode <mode>', 'book or documents').option('--graph', 'Include the relationship graph').action(async (file, opts) => {
   const plan = validatePlan(JSON.parse(await fs.readFile(file, 'utf8')));

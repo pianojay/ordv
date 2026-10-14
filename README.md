@@ -1,6 +1,6 @@
-# Markdown Reading Packet
+# ordv
 
-A local editor and CLI for turning a Markdown link graph into a printable reading packet. Start with a head document or a folder, review the suggested tree, choose documents and reading order, and export a PDF.
+**ordv**, from **Ord(V)**, is a local editor and CLI for selecting and ordering a Markdown graph into a human reading edition. Start with a head document or a folder, review the suggested tree, choose documents and reading order, and export a PDF.
 
 ## Start
 
@@ -80,3 +80,14 @@ npm run test:remote
 `test:acceptance` uses deterministic remote fixture content and writes both PDFs and a saved plan under `output/acceptance`. It verifies final page references for every internal link. `test:ui` uses that plan and the production build to exercise selection, sections, preview, and HTTP export. `test:remote` separately checks a real public Markdown fetch, cache readback, and private-URL rejection.
 
 Core modules live in `src/core`; `src/cli.ts` and `src/server.ts` expose them to command-line and editor workflows. The UI is React/React Flow; rendering uses Markdown-it, KaTeX, Mermaid, Puppeteer, and pdf-lib.
+
+## Project direction
+
+The private source repository is [pianojay/ordv](https://github.com/pianojay/ordv). `npm run ordv -- ...` and the existing `npm run packet -- ...` invoke the same CLI. The original pitch in `docs/motive.md` remains archived unchanged.
+
+- [Product framing and real-workspace audit](docs/product-framing-audit.md)
+- [Agent integration implementation plan](docs/agent-integration-plan.md)
+- [Style licensing and attribution review](docs/style-licensing.md)
+- [Reliability findings beyond page layout](docs/reliability-audit.md)
+
+Agent skill/MCP/plugin integrations and the VS Code styling preset are planned. The reliability audit records confirmed issues separately from successful export checks; imported private lessons and generated PDFs are excluded from Git.
