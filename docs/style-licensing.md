@@ -1,23 +1,27 @@
-# VS Code style reuse and attribution
+# Default reading preset: licensing and compatibility
 
-Checked 14 October 2026 against installed `yzane.markdown-pdf` 2.2.0 and upstream license texts.
+Audited 14 October 2026 for issue #1. ordv now uses a standalone default preset adapted from VS Code and yzane's Markdown PDF extension. VS Code does not need to be installed.
 
-The verified Markdown styles can be copied and adapted, including in a private or commercial application, **provided their copyright and permission notices are retained**. Removing those notices is not an acceptable way to reuse the files. The MIT text does not require an on-screen acknowledgement, logo, or attribution on every generated PDF; it requires the notice to accompany copies or substantial portions of the software.
+## Pinned assets and permission
 
-## Verified sources
+The two Markdown CSS files are unmodified copies from [yzane/vscode-markdown-pdf 2.2.0](https://github.com/yzane/vscode-markdown-pdf/tree/37bee5a16aa63773c3081b23e607248fcb2c8be8/styles), commit `37bee5a16aa63773c3081b23e607248fcb2c8be8`. Their SHA256 digests, the Microsoft license revision, and the selected theme version are recorded in [the asset manifest](../assets/styles/vscode/manifest.json).
 
-| Asset | Source and license | Required handling |
-| --- | --- | --- |
-| `styles/markdown-pdf.css` | yzane's extension; [MIT license](https://github.com/yzane/vscode-markdown-pdf/blob/master/LICENSE.txt), copyright yzane | Retain upstream copyright/license text in distributed source and installation packages. |
-| `styles/markdown.css` | Its file header identifies Microsoft VS Code and the MIT license; [Microsoft license](https://github.com/microsoft/vscode/blob/main/LICENSE.txt) | Keep the Microsoft header and full MIT notice. yzane's notice alone does not replace the original Microsoft notice. |
-| Highlight.js code and selected built-in theme CSS | [BSD 3-Clause](https://github.com/highlightjs/highlight.js/blob/main/LICENSE), copyright Ivan Sagalaev | Preserve copyright, conditions, and disclaimer in source distributions and package documentation. Do not suggest endorsement by the copyright holders. |
+- `markdown.css` retains its Microsoft copyright header and is accompanied by the full [Microsoft MIT license](../assets/styles/vscode/LICENSE-microsoft.txt).
+- `markdown-pdf.css` is accompanied by the full [yzane MIT license](../assets/styles/vscode/LICENSE-yzane.txt).
+- `highlight-default.css` is copied from highlight.js 11.12.0, with its theme header and full [BSD 3-Clause license](../assets/styles/vscode/LICENSE-highlightjs.txt). This verified dependency theme is the issue's allowed alternative to the extension's Tomorrow theme. We do not redistribute that Tomorrow file or claim its asset-level provenance is settled.
 
-The extension's `tomorrow.css` also references the original Tomorrow theme and a separate adaptation. Before vendoring that particular file as an exact compatibility asset, record its provenance and applicable notices. The verified dependency theme can be used for the initial preset while that asset-level review is completed. Do not infer licensing for unrelated icons, logos, screenshots, fonts, or templates from the CSS review.
+The MIT grants allow copying, modification, and commercial redistribution when their copyright and permission notices accompany copies or substantial portions. They do not require a visible credit banner in generated PDFs. The BSD text also requires its conditions and disclaimer in source and binary distributions and forbids implied endorsement. Copying these styles without retaining the applicable notices would not satisfy those conditions.
 
-## Packaging plan
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) contains the complete applicable texts. The source asset directory includes individual licenses. Standalone rendered HTML includes the full notices in CSS comments. CSS-only extraction must retain those comments or supply the notices alongside the CSS. A PDF contains the rendered appearance rather than these CSS source files; ordv's application distribution still carries the notices. This audit covers these stylesheet assets, not unrelated logos, fonts, or a complete extension redistribution, and does not assign a license to ordv's own code.
 
-Vendor approved CSS from a pinned revision into `assets/styles/vscode/`, retaining original headers. Place full source notices next to those assets and summarize them in a root `THIRD_PARTY_NOTICES.md`. Include those files in both npm and desktop/plugin bundles. Use an automated package-content check to prevent notices from being omitted during bundling.
+## Verified cascade and deliberate differences
 
-The preset description should say that it uses styles adapted from VS Code and yzane's Markdown PDF extension. That is useful provenance; a visible credit banner on every page is not a requirement of the verified MIT licenses. Treat a copy of the CSS embedded in a distributed HTML document as a software copy and preserve a notice there as well.
+Upstream's 2.2.0 `buildStyleTags` applies `markdown.css`, the selected highlight theme, then `markdown-pdf.css`. ordv follows that order, then adds narrowly scoped reading-packet structure and print-safety rules. It retains the 14px body, 22px line height, normal-weight ruled H1, 23px code padding, #f8f8f8 code background, 5px quotation border, and upstream inline-code color. Korean fallback fonts are added; math, Mermaid, source labels, TOC, and source page breaks remain ordv features. The original default theme changes syntax colors from Tomorrow, so this is a compatibility preset rather than a pixel-identical extension clone.
 
-No upstream CSS has been vendored into the application yet. The previous comparison used installed assets only in ignored inspection output. This review does not select a license for ordv's own code or claim approval of a complete redistribution of the VS Code extension.
+The extension's defaults are A4 portrait, scale 1, background printing enabled, top margin 15mm and other margins 10mm, with a title/date header and current/total-page footer. ordv keeps its existing A4 portrait and background printing, **18mm margins and no running header/footer**. Per-document margin/font overrides still apply. This avoids adding a current-date/file-URL running header and restarting page counts in concatenated parts. Existing source labels are still printed. The preview has a screen-width constraint and padding; only print media uses the 12px upstream body padding. Do not infer print geometry from the screen preview. Future configurable running furniture belongs in reader-navigation issue #9.
+
+## Distribution and verification
+
+Run `npm test`, `npm run build`, and `npm run test:style`. The style tests hash-check pinned assets and verify notices/order. Browser acceptance checks computed print styles and generates A4 PDFs in both modes with Korean, tables, code, math, Mermaid, and cross-document links. Existing PDF acceptance verifies final internal destinations.
+
+Run `npm pack --dry-run --json --ignore-scripts` when packaging. The package must include `assets/styles/vscode/`, `THIRD_PARTY_NOTICES.md`, and `src/core/style.ts`; the package-content test enforces those entries. Desktop/plugin packaging has not been implemented. Any future bundle must carry this asset directory and root notices or inline the same notices, and must apply the same package-content gate. The runtime fails clearly if required CSS/notices are absent instead of silently falling back to uncredited copies.

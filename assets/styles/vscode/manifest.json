@@ -1,0 +1,23 @@
+{
+  "preset": "vscode-markdown-pdf",
+  "upstream": {
+    "repository": "https://github.com/yzane/vscode-markdown-pdf",
+    "version": "2.2.0",
+    "commit": "37bee5a16aa63773c3081b23e607248fcb2c8be8"
+  },
+  "microsoftLicenseRevision": "363286d1375ebfc10b9f04820a36fbaedb1a9062",
+  "highlight": {
+    "package": "highlight.js",
+    "version": "11.12.0",
+    "theme": "highlight-default.css",
+    "license": "BSD-3-Clause"
+  },
+  "files": {
+    "markdown.css": "9146a348e5de80248ddbfbe45d6b793005cac57cd9a1de40c3825697694ab6bd",
+    "markdown-pdf.css": "1192918f75e1546782a3698ce09741e8713bc7b6e8a6211f87ff7d5819aba964",
+    "LICENSE-microsoft.txt": "9480271317925265e806a9a196aaa33410a962fa9d4d1e248a4a5187bc8c9df9",
+    "LICENSE-yzane.txt": "0a05eae8864b68784d1c8bb34df5c021878b9a01571f87cbc3d708ddcebd65c8",
+    "LICENSE-highlightjs.txt": "6c081431591d9df696c82dc598fe1423765b8a299b200ed00b281afd0f64c490",
+    "highlight-default.css": "70f4df7ea7686afde83192abb82e5a3e291e0b8d1b2de44549f90af23ee41a8e"
+  }
+}

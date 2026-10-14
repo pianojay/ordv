@@ -11,7 +11,8 @@
     "test:acceptance": "tsx tests/acceptance.ts",
     "test:remote": "tsx tests/remote.ts",
     "test:ui": "tsx tests/ui.ts",
-    "ordv": "tsx src/cli.ts"
+    "ordv": "tsx src/cli.ts",
+    "test:style": "tsx tests/style-acceptance.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.0.0",

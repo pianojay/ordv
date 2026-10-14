@@ -1,0 +1,3 @@
+# Preserve vendored bytes so manifest SHA256 values survive Windows checkouts.
+assets/styles/vscode/* -text
+THIRD_PARTY_NOTICES.md text eol=lf
