@@ -2,8 +2,10 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import sanitize from 'sanitize-html';
+import hljs from 'highlight.js';
 import { parser, escape } from './markdown.js';
 import { flatten, validatePlan, type Plan, type Document, type ReadingNode } from './model.js';
+export { diagnostics } from './diagnostics.js';
 
 const require = createRequire(import.meta.url);
 export const destination = (doc: string, slug = '') => `d-${doc}${slug ? `--${slug}` : ''}`;
@@ -37,21 +39,10 @@ img,svg{max-width:100%;height:auto}blockquote{margin-left:0;padding-left:16px;bo
 @media screen{body{max-width:850px;margin:auto;padding:36px}.doc{border-top:1px solid #dfe8e9;margin-top:40px;padding-top:24px}}
 @media print{.screen-only{display:none}a{overflow-wrap:anywhere}}
 `;
-export function diagnostics(plan: Plan): string[] {
-  const ids = new Set(flatten(plan.tree)), out = [...plan.warnings];
-  for (const d of plan.documents.filter(d => ids.has(d.id))) {
-    if (!d.available) out.push(`${d.title}: selected document is unavailable`);
-    out.push(...d.warnings.map(w => `${d.title}: ${w}`));
-    for (const l of d.links) {
-      if (l.issue) out.push(`${d.title}: ${l.href}: ${l.issue}`);
-      else if (l.kind === 'markdown' && l.target && !ids.has(l.target)) out.push(`${d.title}: ${l.label || l.href}: referenced document omitted`);
-    }
-  }
-  return [...new Set(out)];
-}
 function documentHTML(doc: Document, plan: Plan, title = doc.title, sections: string[] = []): string {
   const selected = new Set(flatten(plan.tree));
   const md = parser(plan.settings.math);
+  md.options.highlight = (code, lang) => lang && hljs.getLanguage(lang) ? hljs.highlight(code, { language: lang }).value : escape(code);
   const tokens = md.parse(doc.content, {});
   let headingIndex = 0;
   for (const token of tokens) {
@@ -84,6 +75,12 @@ function documentHTML(doc: Document, plan: Plan, title = doc.title, sections: st
     allowedTags: [...sanitize.defaults.allowedTags, 'img', 'span', 'input', 'math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'msubsup', 'mfrac', 'msqrt', 'mroot', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd', 'mover', 'munder', 'munderover', 'mpadded', 'mstyle', 'menclose', 'eq', 'eqn', 'section'],
     allowedAttributes: { '*': ['id', 'class', 'aria-hidden'], a: ['href', 'title'], img: ['src', 'alt', 'title'], span: ['style'], math: ['xmlns', 'display'], annotation: ['encoding'], input: ['type', 'checked', 'disabled'], mo: ['stretchy', 'fence', 'separator'], mspace: ['width'], mtd: ['columnalign'], mtable: ['rowspacing', 'columnspacing'], mpadded: ['width', 'height', 'depth', 'lspace', 'voffset'] },
     allowedSchemes: ['http', 'https', 'mailto'], allowedSchemesByTag: { img: ['data'] },
+    transformTags: {
+      img: (tagName, attribs): sanitize.Tag => {
+        const snapshot = doc.assets[attribs.src] || (Object.values(doc.assets).includes(attribs.src) ? attribs.src : undefined);
+        return snapshot ? { tagName, attribs: { ...attribs, src: snapshot } } : { tagName: 'span', attribs: { class: 'missing' }, text: `[Unavailable image: ${attribs.alt || attribs.src || 'missing src'}]` };
+      }
+    },
     allowedStyles: { span: { 'height': [/^[\d.e+-]+em$/], 'width': [/^[\d.e+-]+em$/], 'top': [/^[\d.e+-]+em$/], 'vertical-align': [/^[\d.e+-]+em$/], 'margin-left': [/^[\d.e+-]+em$/], 'margin-right': [/^[\d.e+-]+em$/], 'position': [/^relative$/], 'border-bottom-width': [/^[\d.e+-]+em$/] } }
   });
   // Self-links cause Chromium to emit named PDF destinations for every heading.
@@ -143,5 +140,5 @@ export async function renderHTML(value: Plan, onlyDocument?: string, navigationO
   const entry = onlyDocument ? findTitle(plan.tree) : undefined;
   const content = onlyDocument ? documentHTML(byId.get(onlyDocument)!, plan, entry?.title, entry?.sections) : navigationOnly ? navigation : `${navigation}${renderTree(plan.tree)}`;
   const script = resources.mermaid.replace(/<\/script/gi, '<\\/script');
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><style>${css}\n${resources.katex}</style></head><body>${content}<script>${script}</script><script>window.packetReady=false;window.packetErrors=[];(async()=>{try{mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'neutral'});for(const node of document.querySelectorAll('.mermaid')){try{await mermaid.run({nodes:[node]});}catch(e){window.packetErrors.push('Mermaid: '+e.message);node.textContent='Diagram could not be rendered: '+e.message;}}await document.fonts.ready;await Promise.all([...document.images].map(i=>i.complete?Promise.resolve():new Promise(r=>{i.onload=r;i.onerror=r})));}catch(e){window.packetErrors.push(e.message);}finally{window.packetReady=true;}})();</script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><style>${css}\n${resources.katex}</style></head><body>${content}<script>${script}</script><script>window.packetReady=false;window.packetErrors=[];(async()=>{try{mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'neutral'});for(const node of document.querySelectorAll('.mermaid')){try{await mermaid.run({nodes:[node]});}catch(e){window.packetErrors.push('Mermaid: '+e.message);node.textContent='Diagram could not be rendered: '+e.message;}}await document.fonts.ready;await Promise.all([...document.images].map(async i=>{if(!i.complete)await new Promise(r=>{i.onload=r;i.onerror=r});if(!i.naturalWidth)window.packetErrors.push('Image failed to decode: '+(i.alt||'snapshot image'));}));}catch(e){window.packetErrors.push(e.message);}finally{window.packetReady=true;}})();</script></body></html>`;
 }

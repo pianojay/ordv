@@ -1,8 +1,9 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { parseMarkdown } from './markdown.js';
-import { defaults, suggestedTree, type Document, type Link, type Plan } from './model.js';
+import { defaults, suggestedTree, snapshotMetadataHash, type Document, type Link, type Plan } from './model.js';
 import { hash, remote, safeFile, cachedFetcher, resolveReference, type Fetcher } from './io.js';
+import { checksum } from './checksum.js';
 
 export interface DiscoverOptions { refresh?: boolean; maxDocuments?: number; maxDepth?: number; fetcher?: Fetcher; cacheDir?: string }
 const markdownSource = (s: string) => /\.(md|markdown)$/i.test(remote(s) ? new URL(s).pathname : s);
@@ -21,6 +22,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
   if (!seeds.length) throw new Error('No Markdown files found');
   const fetcher = options.fetcher ?? cachedFetcher(options.cacheDir ?? path.join(root, '.reading-packet', 'cache'));
   const docs: Document[] = [], bySource = new Map<string, Document>(), warnings: string[] = [];
+  const aliases = new Map<string, string>();
   let snapshotBytes = 0;
   function reserve(bytes: number) { if (snapshotBytes + bytes > 60 * 1024 * 1024) throw new Error('Snapshot exceeds the 60 MB content/asset limit'); snapshotBytes += bytes; }
   const queue = seeds.map(source => ({ source, depth: 0 }));
@@ -28,7 +30,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
     const { source, depth } = queue[at];
     if (bySource.has(sourceKey(source))) continue;
     if (docs.length >= maxDocuments) { warnings.push(`Discovery stopped at ${maxDocuments} documents`); break; }
-    const doc: Document = { id: hash(sourceKey(source)).slice(0, 16), source, title: path.basename(remote(source) ? new URL(source).pathname : source) || source, content: '', hash: '', links: [], headings: [], assets: {}, warnings: [], available: false };
+    const doc: Document = { id: hash(sourceKey(source)).slice(0, 16), source, title: path.basename(remote(source) ? new URL(source).pathname : source) || source, content: '', hash: '', links: [], headings: [], assets: {}, assetHashes: {}, warnings: [], available: false };
     docs.push(doc); bySource.set(sourceKey(source), doc);
     try {
       let base = source, bytes: Buffer;
@@ -36,9 +38,30 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
         const fetched = await fetcher(source, 5 * 1024 * 1024, !!options.refresh);
         if (fetched.type === 'text/html') throw new Error('HTML pages are references, not importable Markdown');
         bytes = fetched.data; base = fetched.url;
+        const url = new URL(base); url.hash = ''; base = url.href;
+        const canonical = bySource.get(sourceKey(base));
+        if (canonical && canonical !== doc && canonical.available) {
+          aliases.set(doc.id, canonical.id);
+          canonical.aliases = [...new Set([...(canonical.aliases || []), source])].filter(s => s !== canonical.source);
+          if (canonical.sourceHash !== hash(bytes)) canonical.warnings.push('Redirect alias returned changed content; the first canonical snapshot was retained.');
+          bySource.set(sourceKey(source), canonical);
+          docs.splice(docs.indexOf(doc), 1);
+          continue;
+        }
+        if (canonical && canonical !== doc) {
+          // A direct canonical request may have failed before a redirect alias
+          // successfully supplies the snapshot. Replace that failed placeholder.
+          for (const [key, value] of bySource) if (value === canonical) bySource.set(key, doc);
+          docs.splice(docs.indexOf(canonical), 1);
+        }
+        const originalId = doc.id;
+        doc.id = hash(sourceKey(base)).slice(0, 16); doc.source = base;
+        if (source !== base) doc.aliases = [source];
+        aliases.set(originalId, doc.id);
+        bySource.set(sourceKey(base), doc);
       } else { const file = await safeFile(root, source); if ((await fs.stat(file)).size > 5 * 1024 * 1024) throw new Error('Markdown exceeds 5 MB'); bytes = await fs.readFile(file); }
       reserve(bytes.length);
-      doc.content = bytes.toString('utf8').replace(/^\uFEFF/, ''); doc.hash = hash(bytes); doc.available = true;
+      doc.content = bytes.toString('utf8').replace(/^\uFEFF/, ''); doc.sourceHash = hash(bytes); doc.hash = checksum(doc.content); doc.available = true;
       const parsed = parseMarkdown(doc.content); doc.headings = parsed.headings;
       doc.title = parsed.headings.find(h => h.level === 1)?.text || doc.title;
       for (const raw of parsed.links) {
@@ -61,6 +84,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
       }
       for (const href of new Set(parsed.images)) {
         try {
+          if (!href) throw new Error('HTML image has no src; srcset-only images are not supported');
           if (/^data:image\/(png|jpeg|gif|webp);base64,/i.test(href)) { reserve(href.length); doc.assets[href] = href; continue; }
           const resolved = resolveReference(base, href).source;
           if (!resolved) throw new Error('Unsupported image URL');
@@ -72,7 +96,14 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
           doc.assets[href] = `data:${type};base64,${data.toString('base64')}`;
         } catch (e: any) { doc.warnings.push(`Image ${href}: ${e.message}`); }
       }
+      doc.assetHashes = Object.fromEntries(Object.entries(doc.assets).map(([href, data]) => [href, checksum(data)]));
     } catch (e: any) { doc.warnings.push(e.message); }
+  }
+  for (const d of docs) for (const l of d.links) {
+    if (l.target) {
+      const seen = new Set<string>();
+      while (aliases.has(l.target) && aliases.get(l.target) !== l.target && !seen.has(l.target)) { seen.add(l.target); l.target = aliases.get(l.target)!; }
+    }
   }
   const byId = new Map(docs.map(d => [d.id, d]));
   for (const d of docs) for (const l of d.links) {
@@ -82,6 +113,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
       else if (l.fragment && !target.headings.some(h => h.slug === l.fragment)) l.issue ||= `Unresolved heading #${l.fragment}`;
     }
   }
+  for (const d of docs) if (d.available) d.metadataHash = snapshotMetadataHash(d);
   const incoming = new Map(docs.map(d => [d.id, 0]));
   for (const d of docs) for (const t of new Set(d.links.filter(l => l.kind === 'markdown' && l.target !== d.id).map(l => l.target))) if (t && incoming.has(t)) incoming.set(t, incoming.get(t)! + 1);
   function reachable(id: string, seen = new Set<string>()): number {
@@ -96,7 +128,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
   }).sort((a, b) => b.score - a.score || byId.get(a.id)!.source.localeCompare(byId.get(b.id)!.source));
   const head = directory ? candidates[0]?.id : docs[0].id;
   if (!head || !byId.get(head)?.available) throw new Error(`Cannot read the head document: ${docs[0]?.warnings.join('; ') || input}`);
-  return { version: 1, createdAt: new Date().toISOString(), root, input, head, documents: docs, tree: suggestedTree(docs, head), candidates, settings: { ...defaults, documentStyles: {} }, warnings };
+  return { version: 2, createdAt: new Date().toISOString(), root, input, head, documents: docs, tree: suggestedTree(docs, head), candidates, settings: { ...defaults, documentStyles: {} }, warnings };
 }
 async function scan(root: string): Promise<string[]> {
   const files: string[] = [];

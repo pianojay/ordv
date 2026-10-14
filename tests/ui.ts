@@ -15,11 +15,26 @@ try {
   await page.waitForSelector('.packet-node');
   assert.equal(await page.$$eval('.packet-node', nodes => nodes.length), 6);
   const count = () => page.$eval('.pill', el => el.textContent);
+  async function clickNodeButton(label: string) {
+    await page.waitForFunction(label => {
+      const button = document.querySelector(`button[aria-label="${label}"]`);
+      if (!button) return false;
+      const rect = button.getBoundingClientRect(), hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return !!hit && button.contains(hit);
+    }, {}, label).catch(async error => {
+      console.error(await page.evaluate(label => {
+        const b = document.querySelector(`button[aria-label="${label}"]`)!, r = b.getBoundingClientRect();
+        return { button: r.toJSON(), hit: document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML, graph: document.querySelector('.react-flow')?.getBoundingClientRect().toJSON(), viewport: document.querySelector('.react-flow__viewport')?.getAttribute('style') };
+      }, label));
+      throw error;
+    });
+    await page.click(`button[aria-label="${label}"]`);
+  }
   assert.equal(await count(), '5 selected');
-  await page.click('button[aria-label="Include A disconnected thought"]');
+  await clickNodeButton('Include A disconnected thought');
   await page.waitForFunction(() => document.querySelector('.pill')?.textContent === '6 selected');
   assert.equal(await count(), '6 selected');
-  await page.click('button[aria-label="Exclude A disconnected thought"]');
+  await clickNodeButton('Exclude A disconnected thought');
   await page.waitForFunction(() => document.querySelector('.pill')?.textContent === '5 selected');
   assert.equal(await count(), '5 selected');
   await page.type('input[aria-label="New section name"]', 'Background');
