@@ -15,10 +15,12 @@
     "test:style": "tsx tests/style-acceptance.ts"
   },
   "dependencies": {
+    "@noble/hashes": "^2.4.0",
     "@xyflow/react": "^12.0.0",
     "commander": "^14.0.0",
     "express": "^5.0.0",
     "highlight.js": "^11.0.0",
+    "htmlparser2": "^12.0.0",
     "katex": "^0.16.0",
     "markdown-it": "^14.0.0",
     "markdown-it-task-lists": "^2.1.1",

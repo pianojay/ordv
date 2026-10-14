@@ -5,6 +5,7 @@ import os from 'node:os';
 import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRef, PDFString, PDFHexString } from 'pdf-lib';
 import { flatten, validatePlan, type Plan } from './model.js';
 import { renderHTML, diagnostics } from './render.js';
+import { mathErrors } from './diagnostics.js';
 
 export async function launchBrowser(): Promise<{ browser: Browser; close: () => Promise<void> }> {
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'reading-packet-browser-'));
@@ -112,6 +113,8 @@ export async function assemblePDF(parts: Uint8Array[]): Promise<Uint8Array> {
 export async function exportPDF(value: Plan): Promise<{ bytes: Uint8Array; warnings: string[] }> {
   const plan = validatePlan(value), ids = flatten(plan.tree);
   if (!ids.length) throw new Error('Select at least one document');
+  const invalidMath = mathErrors(plan);
+  if (invalidMath.length) throw new Error(`Math preflight failed:\n${invalidMath.join('\n')}`);
   if (plan.settings.graph && ids.length > 30) throw new Error('Printed graph supports up to 30 documents; disable it for larger packets');
   // Generate per-document HTML sequentially so large packets don't retain a copy
   // of embedded fonts and Mermaid for every source at once.

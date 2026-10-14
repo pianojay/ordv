@@ -1,6 +1,6 @@
 # Reliability audit beyond page layout
 
-Audit date: 14 October 2026. These findings describe the current implementation; the proposed repairs are not implemented by this audit.
+Audit date: 14 October 2026. The original findings below are preserved as reproductions. The four confirmed core defects were subsequently repaired in the core-fix patch and covered by regression tests; broader operational limitations remain open.
 
 ## TTA test outcome
 
@@ -12,7 +12,7 @@ The workflow required explicit SSH transfer approval, manual copying, a script t
 
 The destination checks validate page references, not a user clicking every citation or a pixel-level assertion of every anchor coordinate. Generated source copies, PDFs, plans, and probe artifacts remain in ignored `output/` and are not part of the GitHub repository.
 
-## Confirmed functional defects
+## Confirmed core defects and regression fixes
 
 Focused offline probes reproduced these four issues independently of the private TTA lessons:
 
@@ -24,6 +24,17 @@ Focused offline probes reproduced these four issues independently of the private
 | P2 | Redirect aliases can duplicate a single canonical document in the reading tree. | Two linked Markdown URLs both redirect to the same final URL, but discovery creates two IDs and two selected documents. | Track final URL identity and redirect aliases, deduplicate before traversal/selection, and preserve requested URLs as provenance. |
 
 These probes do not establish that the TTA PDF contains those four defects. Its inputs used Markdown links and valid formulas; the probes exercise additional supported or plausible input forms.
+
+The fixes for [#3](https://github.com/pianojay/ordv/issues/3) through [#6](https://github.com/pianojay/ordv/issues/6) are:
+
+- Raw HTML images now enter the same snapshot resolver as Markdown images, including entity-encoded references and remote relative paths. Missing or unsupported images get diagnostics and placeholders; captured images that cannot decode stop PDF export.
+- Selected-document math errors appear in preflight/preview diagnostics and stop export before browser startup. Explicit math disablement keeps literal source; code samples and excluded documents do not trigger a math export error.
+- Version-2 plans validate canonical text hashes, captured-image digests, source-derived title/heading/link metadata, and a metadata digest covering resolved graph fields. Valid legacy plans are checked/upgraded with a warning about newly established legacy image/metadata digests. Editorial tree titles and order remain editable.
+- Remote documents use final URL identities, retain requested aliases, and remap all graph references. A successful alias can replace a failed canonical placeholder. Differing content from later alias responses is reported while retaining one consistent snapshot.
+
+The GUI check also reproduced [#10](https://github.com/pianojay/ordv/issues/10): including a candidate moved its selection button beneath the footer. The controlled graph now sets its viewport directly from measured node bounds when layout or container size changes. The regression check verifies screen hit-testing before clicking the include/exclude control.
+
+Validation: 24 core tests, both PDF-mode destination checks, offline HTML-image export, broken-image rejection, and the real four-lesson TTA packet. The real packet retains 29 pages, 90 valid internal destinations, and the eight expected limited-import reference warnings. Live remote/cache checks passed; GUI acceptance covers visible graph selection, saved plans, preview, API access checks, and HTTP PDF export.
 
 ## Operational and integration limitations
 
@@ -44,4 +55,4 @@ Private source text in a future MCP integration must be treated as data. Collect
 
 ## Release priorities
 
-Before releasing an agent-facing adapter, repair image/math preflight and snapshot consistency, introduce explicit scope plus compact structured diagnostics, and implement compiled package paths with atomic output. Then validate the same saved edition through CLI, MCP, and GUI. Redirect identity, remote-reference normalization, cache freshness, and reader-side annotation tests should be part of the next acceptance corpus.
+After these four core fixes, introduce explicit scope plus compact structured diagnostics and implement compiled package paths with atomic output before releasing an agent-facing adapter. Validate the same saved edition through CLI, MCP, and GUI. Remote-reference normalization, cache freshness, and reader-side annotation tests remain part of the next acceptance corpus. Alice's style work is [#1](https://github.com/pianojay/ordv/issues/1), Bob's integration work is [#2](https://github.com/pianojay/ordv/issues/2), and the broader follow-ups are [#7](https://github.com/pianojay/ordv/issues/7), [#8](https://github.com/pianojay/ordv/issues/8), and [#9](https://github.com/pianojay/ordv/issues/9).

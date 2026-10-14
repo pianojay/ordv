@@ -40,7 +40,7 @@ npm run packet -- export ./reading-plan.json --mode documents --graph -o ./docum
 
 **Book** composes selected Markdown with consistent styling and page breaks between sources. **Per-document packet** renders each source separately and concatenates the PDFs with generated navigation. Select a graph node to set that document's font size and margin in per-document mode. Both modes rebuild TOC and cross-document destinations against final PDF pages.
 
-The renderer supports tables, task lists, highlighted code, raster/SVG images, Korean text through system fonts, KaTeX formulas, and Mermaid diagrams. It uses `vscode-markdown-pdf` as a feature reference; neither VS Code nor Obsidian is required.
+The renderer supports tables, task lists, highlighted code, Markdown and raw HTML raster/SVG images, Korean text through system fonts, KaTeX formulas, and Mermaid diagrams. HTML images use the same bounded snapshot resolver as Markdown images. Invalid math is reported in preview and stops export before browser startup; explicitly disabling math retains literal source. Undecodable captured images stop export. It uses `vscode-markdown-pdf` as a feature reference; neither VS Code nor Obsidian is required.
 
 Tree TOC is enabled by default. A separate relationship graph is optional (up to 30 selected documents). Its solid edges follow actual links represented in the reading tree; dashed edges show cross-links. Preview shows content; final page margins and pagination are applied on export.
 
@@ -61,7 +61,11 @@ Exports use a new temporary browser profile and close it after printing. This wo
 
 ## Saved plans and local service
 
-Version-1 JSON plans contain the selected root/input/head, document content and hashes, link graph, heading metadata, image snapshots, editable tree, ranked heads, and print settings. Treat saved plans as copies of your source material. CLI and UI validate the same schema and export without rereading source documents or fetching network assets.
+Version-2 JSON plans contain the selected root/input/head, document content and hashes, link graph, heading metadata, image snapshots and hashes, editable tree, ranked heads, and print settings. Text hashes cover the exact UTF-8 content stored in the snapshot after an initial BOM is removed; `sourceHash` retains the original byte hash. Source title/heading/link metadata has a separate digest. Loading or exporting a stale/tampered snapshot fails with an actionable error; ordinary reading-tree/title/order edits remain supported. Hashes detect inconsistency, not malicious forgery or source authenticity.
+
+Valid version-1 plans are checked and upgraded when loaded. Their source byte hashes are preserved, including BOM-prefixed sources. Image and derived-metadata digests are established from the stored legacy snapshot with an explicit migration warning; original legacy images cannot be independently verified. Rediscover sources if an old plan has a mismatched text hash or metadata. Treat saved plans as copies of your source material. CLI and UI validate the same schema and export without rereading source documents or fetching network assets.
+
+Remote Markdown is identified by its normalized final URL. Redirect aliases are retained on the document and all graph references are remapped to the canonical ID. If another alias returns changed content during one discovery, ordv keeps the first captured snapshot and reports it rather than silently mixing revisions.
 
 The service binds to `127.0.0.1`; API requests require the token in the printed launch URL and pass host/origin checks. Source HTML is sanitized, document scripts are removed, and the preview runs in a sandboxed iframe. File reads stay within the selected root, including symlink resolution. Public HTTP(S) fetching rejects private network addresses at URL validation and socket resolution, and rechecks redirects.
 
@@ -90,7 +94,7 @@ The private source repository is [pianojay/ordv](https://github.com/pianojay/ord
 - [Style licensing and attribution review](docs/style-licensing.md)
 - [Reliability findings beyond page layout](docs/reliability-audit.md)
 
-Agent skill/MCP/plugin integrations are planned. The standalone VS Code styling preset is available by default. The reliability audit records confirmed issues separately from successful export checks; imported private lessons and generated PDFs are excluded from Git.
+Agent skill/MCP/plugin integrations are planned. The standalone VS Code styling preset is available by default. Follow-up work is tracked in [GitHub issues](https://github.com/pianojay/ordv/issues). The four original core defects have regression fixes; broader discovery, packaging, and reading controls remain separate work. Imported private lessons and generated PDFs are excluded from Git.
 
 ## Default reading style
 

@@ -47,4 +47,15 @@ const missing = structuredClone(plan); missing.documents.find(d => d.id === miss
 await assert.rejects(exportPDF(missing), /unavailable/);
 const empty = structuredClone(plan); for (const id of flatten(empty.tree)) empty.tree = excludeDocument(empty.tree, id);
 await assert.rejects(exportPDF(empty), /Select at least/);
+const imageRoot = path.join(out, 'image-fixture'); await fs.mkdir(imageRoot, { recursive: true });
+await fs.copyFile('examples/notes/pipeline.svg', path.join(imageRoot, 'figure.svg'));
+await fs.writeFile(path.join(imageRoot, 'README.md'), '# HTML image test\n<img src="figure.svg" alt="Offline HTML figure">\n<img src="missing.png" alt="Missing evidence">');
+const imagePlan = await discover(path.join(imageRoot, 'README.md')); imagePlan.settings.toc = false;
+const imageResult = await exportPDF(imagePlan);
+assert(imageResult.warnings.some(w => w.includes('missing.png')));
+await fs.writeFile(path.join(out, 'html-images.pdf'), imageResult.bytes);
+await fs.writeFile(path.join(imageRoot, 'broken.png'), 'not image data');
+await fs.writeFile(path.join(imageRoot, 'README.md'), '# Broken image\n<img src="broken.png" alt="Broken evidence">');
+await assert.rejects(exportPDF(await discover(path.join(imageRoot, 'README.md'))), /Image failed to decode: Broken evidence/);
+console.log('Offline HTML image export passed; missing image is reported; undecodable image is rejected.');
 console.log('Acceptance passed. PDF outputs: output/acceptance/{book,documents}.pdf');

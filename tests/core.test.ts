@@ -119,7 +119,7 @@ describe('tree editing and snapshots', () => {
     expect(html).toContain(`d-${child.id}--same`);
     const excluded = structuredClone(plan); excluded.tree = excludeDocument(excluded.tree, child.id);
     expect(diagnostics(excluded).some(w => w.includes('omitted'))).toBe(true);
-    expect(() => validatePlan({ ...plan, version: 2 })).toThrow();
+    expect(() => validatePlan({ ...plan, version: 3 })).toThrow();
     expect(() => validatePlan({ ...plan, tree: [...plan.tree, ...plan.tree] })).toThrow('Duplicate');
   });
 });
