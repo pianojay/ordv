@@ -23,6 +23,7 @@ export async function atomicOutput<T>(file: string, produce: () => Promise<{ byt
     else await fs.link(temporary, target);
     return result;
   } finally {
-    await fs.rm(temporary, { force: true }); await guard.close(); await fs.rm(lock, { force: true });
+    try { await fs.rm(temporary, { force: true }); }
+    finally { try { await guard.close(); } finally { await fs.rm(lock, { force: true }); } }
   }
 }

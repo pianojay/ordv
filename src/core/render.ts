@@ -3,8 +3,10 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import sanitize from 'sanitize-html';
 import { readingStyle } from './style.js';
+import { answerPolicy } from './answers.js';
+import { readingCSS, figureScript } from './figures.js';
 import hljs from 'highlight.js';
-import { parser, escape } from './markdown.js';
+import { parser, escape, foldedVisibility } from './markdown.js';
 import { flatten, validatePlan, type Plan, type Document, type ReadingNode } from './model.js';
 export { diagnostics } from './diagnostics.js';
 
@@ -26,7 +28,7 @@ function resourcesForRender() {
     return { katex: css, mermaid: await fs.readFile(mermaidPath, 'utf8') };
   })();
 }
-function documentHTML(doc: Document, plan: Plan, title = doc.title, sections: string[] = []): string {
+function documentHTML(doc: Document, plan: Plan, title = doc.title, sections: string[] = [], hidden = new Map<string, Set<string>>()): string {
   const selected = new Set(flatten(plan.tree));
   const md = parser(plan.settings.math);
   md.options.highlight = (code, lang) => lang && hljs.getLanguage(lang) ? hljs.highlight(code, { language: lang }).value : escape(code);
@@ -37,11 +39,12 @@ function documentHTML(doc: Document, plan: Plan, title = doc.title, sections: st
     for (const child of token.children || []) {
       if (child.type === 'link_open') {
         const href = child.attrGet('href') || '', link = doc.links.find(l => l.href === href);
-        if (link?.target && selected.has(link.target) && !link.issue) child.attrSet('href', linkURL(destination(link.target, link.fragment)));
+        const hiddenTarget = !!(link?.target && link.fragment && hidden.get(link.target)?.has(link.fragment));
+        if (link?.target && selected.has(link.target) && !link.issue && !hiddenTarget) child.attrSet('href', linkURL(destination(link.target, link.fragment)));
         else if (link) {
           child.attrSet('class', 'reference');
-          child.attrSet('title', link.issue || (link.kind === 'markdown' ? 'Referenced document omitted from this packet' : 'Source reference'));
-          if (!/^(https?:\/\/|mailto:)/i.test(href) && !href.startsWith('#')) child.attrSet('href', `https://packet-reference.invalid/?source=${encodeURIComponent(doc.source)}&reference=${encodeURIComponent(href)}`);
+          child.attrSet('title', hiddenTarget ? 'Heading is inside a closed answer; choose Expand or Appendix to include it' : link.issue || (link.kind === 'markdown' ? 'Referenced document omitted from this packet' : 'Source reference'));
+          if (hiddenTarget || !/^(https?:\/\/|mailto:)/i.test(href) && !href.startsWith('#')) child.attrSet('href', `https://packet-reference.invalid/?source=${encodeURIComponent(doc.source)}&reference=${encodeURIComponent(href)}`);
         }
       }
       if (child.type === 'image') {
@@ -59,8 +62,8 @@ function documentHTML(doc: Document, plan: Plan, title = doc.title, sections: st
   };
   let body = md.renderer.render(tokens, md.options, {});
   body = sanitize(body, {
-    allowedTags: [...sanitize.defaults.allowedTags, 'img', 'span', 'input', 'math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'msubsup', 'mfrac', 'msqrt', 'mroot', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd', 'mover', 'munder', 'munderover', 'mpadded', 'mstyle', 'menclose', 'eq', 'eqn', 'section'],
-    allowedAttributes: { '*': ['id', 'class', 'aria-hidden'], a: ['href', 'title'], img: ['src', 'alt', 'title'], span: ['style'], math: ['xmlns', 'display'], annotation: ['encoding'], input: ['type', 'checked', 'disabled'], mo: ['stretchy', 'fence', 'separator'], mspace: ['width'], mtd: ['columnalign'], mtable: ['rowspacing', 'columnspacing'], mpadded: ['width', 'height', 'depth', 'lspace', 'voffset'] },
+    allowedTags: [...sanitize.defaults.allowedTags, 'details', 'summary', 'img', 'span', 'input', 'math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'msubsup', 'mfrac', 'msqrt', 'mroot', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd', 'mover', 'munder', 'munderover', 'mpadded', 'mstyle', 'menclose', 'eq', 'eqn', 'section'],
+    allowedAttributes: { '*': ['id', 'class', 'aria-hidden'], details: ['open'], a: ['href', 'title'], img: ['src', 'alt', 'title'], span: ['style'], math: ['xmlns', 'display'], annotation: ['encoding'], input: ['type', 'checked', 'disabled'], mo: ['stretchy', 'fence', 'separator'], mspace: ['width'], mtd: ['columnalign'], mtable: ['rowspacing', 'columnspacing'], mpadded: ['width', 'height', 'depth', 'lspace', 'voffset'] },
     allowedSchemes: ['http', 'https', 'mailto'], allowedSchemesByTag: { img: ['data'] },
     transformTags: {
       img: (tagName, attribs): sanitize.Tag => {
@@ -74,15 +77,19 @@ function documentHTML(doc: Document, plan: Plan, title = doc.title, sections: st
   body = body.replace(/<(h[1-6]) id="([^"]+)">([\s\S]*?)<\/\1>/g, (_, tag, id, text) => `<${tag} id="${id}"><a class="heading-link" href="#${id}">${text}</a></${tag}>`);
   const firstTitle = tokens[0]?.type === 'heading_open' && tokens[0].tag === 'h1' ? doc.headings[0] : undefined;
   if (firstTitle) body = body.replace(/^<h1[\s\S]*?<\/h1>\s*/, '');
+  body = answerPolicy(body, plan.settings.answers, destination(doc.id));
   const style = plan.settings.mode === 'documents' ? plan.settings.documentStyles[doc.id] : undefined;
-  return `<section class="doc" style="${style ? `font-size:${style.fontSize}pt` : ''}">${sections.length ? `<p class="section-label">${escape(sections.join(' / '))}</p>` : ''}<h1 id="${destination(doc.id)}"><a class="heading-link" ${firstTitle ? `id="${destination(doc.id, firstTitle.slug)}"` : ''} href="#${destination(doc.id, firstTitle?.slug)}">${escape(title)}</a></h1><p class="source"><a class="heading-link" href="#${destination(doc.id)}">${escape(doc.source)}</a></p>${body}${doc.links.some(l => l.kind === 'markdown' && l.target && !selected.has(l.target)) ? '<p class="reference-note">Some linked documents are references outside this packet.</p>' : ''}</section>`;
+  const provenance = doc.provenance;
+  const attribution = `<p class="source"><a class="heading-link" href="#${destination(doc.id)}">${escape(provenance?.originalLocation || doc.source)}</a>${provenance ? `<br>Captured ${escape(provenance.capturedAt)} · ${escape(doc.role || 'chapter')} · ${escape(doc.freshness || 'unreviewed')}${provenance.origin === 'user-provided' ? ' · original location supplied by user' : ''}` : ''}</p>`;
+  const status = doc.freshness === 'superseded' ? `<p class="reference-note">Historical source: marked superseded${doc.supersededBy ? ` by ${escape(doc.supersededBy)}` : ''}. Original content retained.</p>` : '';
+  return `<section class="doc" data-source="${doc.id}" style="${style ? `font-size:${style.fontSize}pt` : ''}">${sections.length ? `<p class="section-label">${escape(sections.join(' / '))}</p>` : ''}<h1 id="${destination(doc.id)}"><a class="heading-link" ${firstTitle ? `id="${destination(doc.id, firstTitle.slug)}"` : ''} href="#${destination(doc.id, firstTitle?.slug)}">${escape(title)}</a></h1>${attribution}${status}${body}${doc.links.some(l => l.kind === 'markdown' && l.target && !selected.has(l.target)) ? '<p class="reference-note">Some linked documents are references outside this packet.</p>' : ''}</section>`;
 }
-function tocHTML(plan: Plan) {
+function tocHTML(plan: Plan, hidden: Map<string, Set<string>>) {
   const byId = new Map(plan.documents.map(d => [d.id, d]));
   function list(nodes: ReadingNode[]): string {
     return `<ul>${nodes.map(n => {
       const doc = n.documentId ? byId.get(n.documentId) : undefined;
-      return `<li>${doc ? `<a href="${linkURL(destination(doc.id))}">${escape(n.title)}</a>` : `<strong>${escape(n.title)}</strong>`}${doc ? `<ul>${doc.headings.filter((h, i) => !(i === 0 && h.level === 1 && h.text === doc.title)).map(h => `<li class="heading-entry" style="margin-left:${(h.level - 1) * 12}px"><a href="${linkURL(destination(doc.id, h.slug))}">${escape(h.text)}</a></li>`).join('')}</ul>` : ''}${n.children.length ? list(n.children) : ''}</li>`;
+      return `<li>${doc ? `<a href="${linkURL(destination(doc.id))}">${escape(n.title)}</a>` : `<strong>${escape(n.title)}</strong>`}${doc && plan.settings.tocDepth > 0 ? `<ul>${doc.headings.filter((h, i) => !hidden.get(doc.id)?.has(h.slug) && h.level <= plan.settings.tocDepth && !(i === 0 && h.level === 1 && h.text === doc.title)).map(h => `<li class="heading-entry" style="margin-left:${(h.level - 1) * 12}px"><a href="${linkURL(destination(doc.id, h.slug))}">${escape(h.text)}</a></li>`).join('')}</ul>` : ''}${n.children.length ? list(n.children) : ''}</li>`;
     }).join('')}</ul>`;
   }
   return `<section class="navigation toc"><p class="source">MARKDOWN READING PACKET</p><h1>Contents</h1>${list(plan.tree)}</section>`;
@@ -118,15 +125,19 @@ export async function renderHTML(value: Plan, onlyDocument?: string, navigationO
   for (const id of selected) if (!byId.get(id)?.available) throw new Error(`Selected document unavailable: ${id}`);
   const resources = await resourcesForRender();
   const css = await readingStyle();
+  const hidden = new Map(plan.settings.answers === 'preserve' ? plan.documents.map(d => [d.id, foldedVisibility(d.content).hidden]) : []);
+  const layoutPlan = structuredClone(plan);
+  const override = onlyDocument && plan.settings.documentStyles[onlyDocument]?.marginMm;
+  if (typeof override === 'number') layoutPlan.settings.marginsMm = { top: override, right: override, bottom: override, left: override };
   function renderTree(nodes: ReadingNode[], sections: string[] = []): string {
-    return nodes.map(n => `${n.documentId ? documentHTML(byId.get(n.documentId)!, plan, n.title, sections) : ''}${renderTree(n.children, n.documentId ? sections : [...sections, n.title])}`).join('');
+    return nodes.map(n => `${n.documentId ? documentHTML(byId.get(n.documentId)!, plan, n.title, sections, hidden) : ''}${renderTree(n.children, n.documentId ? sections : [...sections, n.title])}`).join('');
   }
-  const navigation = `${plan.settings.toc ? tocHTML(plan) : ''}${plan.settings.graph ? `<section class="graph-page"><h1>Document relationships</h1><p class="source">Solid: reading-tree links · Dashed: cross-links. Numbers indicate reading order.</p>${graphSVG(plan)}</section>` : ''}`;
+  const navigation = `${plan.settings.toc ? tocHTML(plan, hidden) : ''}${plan.settings.graph ? `<section class="graph-page"><h1>Document relationships</h1><p class="source">Solid: reading-tree links · Dashed: cross-links. Numbers indicate reading order.</p>${graphSVG(plan)}</section>` : ''}`;
   function findTitle(nodes: ReadingNode[], sections: string[] = []): { title: string; sections: string[] } | undefined {
     for (const n of nodes) { if (n.documentId === onlyDocument) return { title: n.title, sections }; const found = findTitle(n.children, n.documentId ? sections : [...sections, n.title]); if (found) return found; }
   }
   const entry = onlyDocument ? findTitle(plan.tree) : undefined;
-  const content = onlyDocument ? documentHTML(byId.get(onlyDocument)!, plan, entry?.title, entry?.sections) : navigationOnly ? navigation : `${navigation}${renderTree(plan.tree)}`;
+  const content = onlyDocument ? documentHTML(byId.get(onlyDocument)!, plan, entry?.title, entry?.sections, hidden) : navigationOnly ? navigation : `${navigation}${renderTree(plan.tree)}`;
   const script = resources.mermaid.replace(/<\/script/gi, '<\\/script');
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><style>${css}\n${resources.katex}</style></head><body>${content}<script>${script}</script><script>window.packetReady=false;window.packetErrors=[];(async()=>{try{mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'neutral'});for(const node of document.querySelectorAll('.mermaid')){try{await mermaid.run({nodes:[node]});}catch(e){window.packetErrors.push('Mermaid: '+e.message);node.textContent='Diagram could not be rendered: '+e.message;}}await document.fonts.ready;await Promise.all([...document.images].map(async i=>{if(!i.complete)await new Promise(r=>{i.onload=r;i.onerror=r});if(!i.naturalWidth)window.packetErrors.push('Image failed to decode: '+(i.alt||'snapshot image'));}));}catch(e){window.packetErrors.push(e.message);}finally{window.packetReady=true;}})();</script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><style>${css}\n${resources.katex}\n${readingCSS(layoutPlan)}</style></head><body>${content}<script>${script}</script><script>window.packetReady=false;window.packetErrors=[];(async()=>{try{mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'neutral'});for(const node of document.querySelectorAll('.mermaid')){try{await mermaid.run({nodes:[node]});}catch(e){window.packetErrors.push('Mermaid: '+e.message);node.textContent='Diagram could not be rendered: '+e.message;}}await document.fonts.ready;await Promise.all([...document.images].map(async i=>{if(!i.complete)await new Promise(r=>{i.onload=r;i.onerror=r});if(!i.naturalWidth)window.packetErrors.push('Image failed to decode: '+(i.alt||'snapshot image'));}));${figureScript(layoutPlan)}}catch(e){window.packetErrors.push(e.message);}finally{window.packetReady=true;}})();</script></body></html>`;
 }

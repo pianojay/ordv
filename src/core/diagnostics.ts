@@ -1,7 +1,7 @@
 import { flatten, type Plan } from './model.js';
-import { mathProblems, parseMarkdown } from './markdown.js';
+import { mathProblems, parseMarkdown, foldedVisibility } from './markdown.js';
 
-export type DiagnosticCode = 'DISCOVERY_LIMIT' | 'SOURCE_NOTICE' | 'SOURCE_UNAVAILABLE' | 'SCOPE_EXCLUDED' | 'TRAVERSAL_LIMIT' | 'TARGET_UNAVAILABLE' | 'BROKEN_ANCHOR' | 'DOCUMENT_OMITTED' | 'ASSET_UNAVAILABLE' | 'MATH_INVALID' | 'SOURCE_DATE_UNKNOWN' | 'PROVENANCE_UNKNOWN' | 'SNAPSHOT_STALE' | 'SOURCE_SUPERSEDED' | 'WEB_REFERENCE';
+export type DiagnosticCode = 'DISCOVERY_LIMIT' | 'SOURCE_NOTICE' | 'SOURCE_UNAVAILABLE' | 'SCOPE_EXCLUDED' | 'TRAVERSAL_LIMIT' | 'TARGET_UNAVAILABLE' | 'BROKEN_ANCHOR' | 'DOCUMENT_OMITTED' | 'ASSET_UNAVAILABLE' | 'MATH_INVALID' | 'SOURCE_DATE_UNKNOWN' | 'PROVENANCE_UNKNOWN' | 'SNAPSHOT_STALE' | 'SOURCE_SUPERSEDED' | 'WEB_REFERENCE' | 'ANSWER_VISIBILITY' | 'HIDDEN_ANCHOR';
 export interface Diagnostic { code: DiagnosticCode; severity: 'info' | 'warning' | 'error'; message: string; documentId?: string; href?: string }
 export function mathErrors(plan: Plan): string[] {
   if (!plan.settings.math) return [];
@@ -10,11 +10,13 @@ export function mathErrors(plan: Plan): string[] {
 }
 export function diagnosticRecords(plan: Plan, now = new Date()): Diagnostic[] {
   const ids = new Set(flatten(plan.tree)), out: Diagnostic[] = [];
+  const visibility = new Map(plan.settings.answers === 'preserve' ? plan.documents.map(d => [d.id, foldedVisibility(d.content)]) : []);
   const add = (code: DiagnosticCode, severity: Diagnostic['severity'], message: string, documentId?: string, href?: string) => out.push({ code, severity, message, documentId, href });
   for (const w of plan.warnings) add(w.startsWith('Discovery stopped') ? 'DISCOVERY_LIMIT' : 'SOURCE_NOTICE', 'warning', w);
   for (const m of mathErrors(plan)) add('MATH_INVALID', 'error', m);
   for (const d of plan.documents.filter(d => ids.has(d.id))) {
     const emit = (code: DiagnosticCode, severity: Diagnostic['severity'], message: string, href?: string) => add(code, severity, `${d.title}: ${message}`, d.id, href);
+    if (visibility.get(d.id)?.closed) emit('ANSWER_VISIBILITY', 'warning', 'closed folded content will not print; choose Expand or Appendix to include all answers');
     if (!d.provenance) emit('PROVENANCE_UNKNOWN', 'info', 'legacy snapshot has no independently recorded source provenance');
     else {
       const ageFrom = d.provenance.fetchedAt || (!d.provenance.cache ? d.provenance.capturedAt : undefined);
@@ -29,7 +31,8 @@ export function diagnosticRecords(plan: Plan, now = new Date()): Diagnostic[] {
       if (l.issue) {
         const code = /escapes|outside.*root/i.test(l.issue) ? 'SCOPE_EXCLUDED' : /limit/i.test(l.issue) ? 'TRAVERSAL_LIMIT' : /heading|anchor/i.test(l.issue) ? 'BROKEN_ANCHOR' : 'TARGET_UNAVAILABLE';
         emit(code, 'warning', `${l.href}: ${l.issue}`, l.href);
-      } else if (l.kind === 'markdown' && l.target && !ids.has(l.target)) emit('DOCUMENT_OMITTED', 'info', `${l.label || l.href}: referenced document omitted`, l.href);
+      } else if (l.target && l.fragment && visibility.get(l.target)?.hidden.has(l.fragment)) emit('HIDDEN_ANCHOR', 'warning', `${l.href}: heading is inside a closed answer and is retained as a reference`, l.href);
+      else if (l.kind === 'markdown' && l.target && !ids.has(l.target)) emit('DOCUMENT_OMITTED', 'info', `${l.label || l.href}: referenced document omitted`, l.href);
       else if (l.kind === 'web' && /github\.com\/.*\/blob\//.test(l.href)) emit('WEB_REFERENCE', 'info', `${l.href}: GitHub blob page retained as a web reference (including line fragments)`, l.href);
     }
   }

@@ -22,7 +22,7 @@ npm run build
 npm run packet -- serve examples/notes --production
 ```
 
-The example folder includes a remote link, so initial discovery can need network access. Preview and export thereafter use captured sources. **Refresh** rereads sources, refreshes remote cache, and rebuilds the suggested tree; save custom arrangements first.
+The example folder includes a remote link, so initial discovery can need network access. Preview and export thereafter use captured sources. **Refresh** rereads sources and remote cache while preserving the edited tree and editorial metadata. Newly unavailable selected sources block export.
 
 ## CLI
 
@@ -44,7 +44,7 @@ npm run packet -- export ./reading-plan.json --mode documents --graph -o ./docum
 
 The renderer supports tables, task lists, highlighted code, Markdown and raw HTML raster/SVG images, Korean text through system fonts, KaTeX formulas, and Mermaid diagrams. HTML images use the same bounded snapshot resolver as Markdown images. Invalid math is reported in preview and stops export before browser startup; explicitly disabling math retains literal source. Undecodable captured images stop export. It uses `vscode-markdown-pdf` as a feature reference; neither VS Code nor Obsidian is required.
 
-Tree TOC is enabled by default. A separate relationship graph is optional (up to 30 selected documents). Its solid edges follow actual links represented in the reading tree; dashed edges show cross-links. Preview shows content; final page margins and pagination are applied on export.
+A concise section/document TOC is enabled by default; heading depth is configurable. A separate relationship graph is optional (up to 30 selected documents). Its solid edges follow actual links represented in the reading tree; dashed edges show cross-links. Preview shows content; final page margins and pagination are applied on export.
 
 PDF links remain source references. Importing or appending existing PDFs, wiki links, HTML article extraction, authenticated URLs, and desktop packaging are deferred. Omitted local Markdown references are readable labels rather than links to local files in the output. Unavailable selected documents and invalid Mermaid diagrams stop export; missing images and unresolved references produce visible notices.
 
@@ -105,3 +105,13 @@ The standalone default uses pinned VS Code and yzane Markdown PDF CSS, with the 
 ## Running headers and page numbers
 
 The default print profile uses yzane’s declared A4 portrait settings: 15 mm top and 10 mm other paper margins, filename/UTC export-date headers, and packet-wide page numbers. The editor and CLI also support document-relative or combined numbering, custom margins, and explicitly supplied source-creation dates. See [marginals and print settings](docs/marginals.md) for options and provenance rules. Verify both modes with `npm run test:marginals` (Chromium and Poppler required).
+
+## Collection and reading controls
+
+Choose an authorized root independently of the head, record original locations for transferred collections, and review stable diagnostics, roles, supersession notes, and snapshot age. See [collection scope](docs/collection-scope.md). Roles do not silently change selection.
+
+Tablet and duplex profiles provide annotation/binding space. Folded answers can preserve visibility, expand, or move to a source-specific appendix. Readable figures use landscape pages and overlapping vector detail tiles when needed. See [reading layouts and device validation](docs/reading.md).
+
+## Installable CLI
+
+`npm run build && npm pack` produces an installable tarball with compiled CLI/core, UI, styling and notices. Install with `npm install -g /path/to/ordv-0.1.0.tgz`; `ordv` then runs from any directory. Existing outputs require `--force`. See [runtime and atomic output](docs/runtime.md).

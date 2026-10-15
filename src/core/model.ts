@@ -29,6 +29,10 @@ export const SettingsSchema = z.object({
   runningHeader: z.boolean().default(true),
   headerDate: z.enum(['export', 'source-created', 'none']).default('export'),
   pageNumbers: z.enum(['packet', 'document', 'both', 'none']).default('packet'),
+  readingProfile: z.enum(['standard', 'tablet', 'duplex']).default('standard'),
+  tocDepth: z.number().int().min(0).max(6).default(0),
+  answers: z.enum(['preserve', 'expand', 'appendix']).default('preserve'),
+  figures: z.enum(['fit', 'readable']).default('fit'),
   documentStyles: z.record(z.string(), z.object({ fontSize: z.number().min(8).max(24), marginMm: z.number().min(5).max(40).optional() })).default({})
 });
 export const PlanSchema = z.object({ version: z.union([z.literal(1), z.literal(2)]), createdAt: z.string(), root: z.string(), input: z.string(), head: z.string(), documents: z.array(DocumentSchema), tree: z.array(TreeSchema), candidates: z.array(z.object({ id: z.string(), title: z.string(), score: z.number(), reachable: z.number(), incoming: z.number() })), settings: SettingsSchema, warnings: z.array(z.string()),
@@ -36,6 +40,11 @@ export const PlanSchema = z.object({ version: z.union([z.literal(1), z.literal(2
 });
 export type Plan = z.infer<typeof PlanSchema>;
 export const defaults = SettingsSchema.parse({});
+export function applyReadingProfile(plan: Plan, profile: Plan['settings']['readingProfile']) {
+  plan.settings.readingProfile = profile;
+  plan.settings.marginsMm = profile === 'tablet' ? { top: 18, right: 40, bottom: 18, left: 15 }
+    : profile === 'duplex' ? { top: 18, right: 25, bottom: 20, left: 25 } : { top: 15, right: 10, bottom: 10, left: 10 };
+}
 export function snapshotMetadataHash(doc: Document): string {
   // Arrays make the digest independent of JSON object-property ordering.
   return checksum(JSON.stringify([doc.title, doc.headings.map(h => [h.level, h.text, h.slug]), doc.links.map(l => [l.href, l.label, l.kind, l.target ?? null, l.fragment ?? null, l.issue ?? null])]));

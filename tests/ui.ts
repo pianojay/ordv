@@ -41,10 +41,15 @@ try {
   await page.click('.add-section button');
   const newSection = await page.$eval('input[aria-label="Section title"]', el => (el as HTMLInputElement).value); assert.equal(newSection, 'Background');
   await page.select('select[aria-label="Parent of Research notes"]', await page.$eval('select[aria-label="Parent of Research notes"]', el => [...(el as HTMLSelectElement).options].find(o => o.textContent === 'Background')!.value));
+  await page.select('select[aria-label="Reading profile"]', 'tablet');
+  await page.select('select[aria-label="Folded answers"]', 'appendix');
+  await page.select('select[aria-label="TOC detail"]', '2');
   await page.select('select[aria-label="Page numbers"]', 'both');
   await page.select('select[aria-label="Header date"]', 'source-created');
   await page.click('.packet-node.head .node-title');
   await page.waitForSelector('input[aria-label="Source creation date"]');
+  await page.select('select[aria-label="Document role"]', 'prerequisite');
+  await page.select('select[aria-label="Source status"]', 'historical');
   await page.$eval('input[aria-label="Source creation date"]', el => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, '2026-10-01');
     el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -58,9 +63,14 @@ try {
     return captured.text();
   });
   const edited = validatePlan(JSON.parse(saved)); assert(edited.tree.some(n => n.title === 'Background'));
+  assert.equal(edited.documents.find(d => d.id === edited.head)!.role, 'prerequisite');
+  assert.equal(edited.documents.find(d => d.id === edited.head)!.freshness, 'historical');
   assert.equal(edited.settings.pageNumbers, 'both');
   assert.equal(edited.settings.headerDate, 'source-created');
-  assert.deepEqual(edited.settings.marginsMm, { top: 15, right: 10, bottom: 10, left: 10 });
+  assert.deepEqual(edited.settings.marginsMm, { top: 18, right: 40, bottom: 18, left: 15 });
+  assert.equal(edited.settings.answers, 'appendix');
+  assert.equal(edited.settings.tocDepth, 2);
+  assert.equal(edited.settings.readingProfile, 'tablet');
   assert.equal(edited.documents.find(d => d.id === edited.head)!.sourceCreatedDate?.date, '2026-10-01');
   await fs.writeFile('output/acceptance/edited-plan.json', saved);
   await (await page.$('input[type=file]'))!.uploadFile('output/acceptance/edited-plan.json');

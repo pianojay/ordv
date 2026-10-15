@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { discover, refreshPlan } from './core/discover.js';
-import { roles, validatePlan, flatten } from './core/model.js';
+import { roles, applyReadingProfile, validatePlan, flatten } from './core/model.js';
 import { diagnosticRecords } from './core/diagnostics.js';
 import { excludeDocument } from './core/tree.js';
 import { atomicOutput } from './core/output.js';
@@ -55,6 +55,10 @@ command.command('serve').alias('open').argument('[source]', 'Optional initial do
 command.command('export').argument('<plan>', 'Saved JSON reading plan').requiredOption('-o, --output <file>', 'Output PDF').option('--mode <mode>', 'book or documents').option('--graph', 'Include the relationship graph')
   .option('--force', 'Explicitly replace an existing output')
   .option('--browser <executable>', 'Chrome/Edge/Chromium executable override')
+  .option('--profile <profile>', 'standard, tablet, or duplex')
+  .option('--toc-depth <level>', '0 for chapters only, or heading level 1–6')
+  .option('--answers <policy>', 'preserve, expand, or appendix')
+  .option('--figures <policy>', 'fit or readable')
   .option('--page-numbers <scope>', 'packet, document, both, or none')
   .option('--header-date <date>', 'export (UTC), source-created, or none')
   .option('--running-header', 'Show the filename/date running header')
@@ -63,6 +67,10 @@ command.command('export').argument('<plan>', 'Saved JSON reading plan').required
   .option('--source-date <id=date>', 'User-supplied creation date (YYYY-MM-DD) for a document ID; repeatable', (value: string, previous: string[]) => [...previous, value], [])
   .action(async (file, opts) => {
   const plan = validatePlan(JSON.parse(await fs.readFile(file, 'utf8')));
+  if (opts.profile) { if (!['standard', 'tablet', 'duplex'].includes(opts.profile)) throw new Error('Invalid reading profile'); applyReadingProfile(plan, opts.profile); }
+  if (opts.tocDepth !== undefined) plan.settings.tocDepth = Number(opts.tocDepth);
+  if (opts.answers) plan.settings.answers = opts.answers;
+  if (opts.figures) plan.settings.figures = opts.figures;
   if (opts.mode) plan.settings.mode = opts.mode;
   if (opts.graph) plan.settings.graph = true;
   if (opts.pageNumbers) plan.settings.pageNumbers = opts.pageNumbers;
@@ -81,7 +89,7 @@ command.command('export').argument('<plan>', 'Saved JSON reading plan').required
     doc.sourceCreatedDate = { date, provenance: 'user-provided' };
   }
   const result = await atomicOutput(opts.output, async () => { const result = await exportPDF(validatePlan(plan), { signal: cancellation.signal, executablePath: opts.browser }); return { bytes: result.bytes, result }; }, { force: opts.force, signal: cancellation.signal });
-  result.warnings.forEach(w => console.error(`Warning: ${w}`));
+  result.diagnostics.forEach(d => console.error(`${d.severity} [${d.code}]: ${d.message}`));
   console.log(`Exported ${opts.output} (${result.bytes.length} bytes)`);
 });
 command.parseAsync().catch(e => { console.error(`Error: ${e.message}`); if (!cancellation.signal.aborted) process.exitCode = 1; });
