@@ -2,6 +2,8 @@
 
 **ordv**, from **Ord(V)**, is a local editor and CLI for selecting and ordering a Markdown graph into a human reading edition. Start with a head document or a folder, review the suggested tree, choose documents and reading order, and export a PDF.
 
+![A folder of linked Markdown notes becomes a graph, then a reading tree, then a sequence, and is exported as one bound PDF.](docs/assets/ordv-demo.gif)
+
 ## Start
 
 Requires Node.js 22.12+ (tested with Node 24 on Windows).
