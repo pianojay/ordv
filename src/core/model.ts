@@ -4,7 +4,16 @@ import { parseMarkdown } from './markdown.js';
 
 export const LinkSchema = z.object({ href: z.string(), label: z.string(), kind: z.enum(['markdown', 'pdf', 'web', 'anchor', 'other']), target: z.string().optional(), fragment: z.string().optional(), issue: z.string().optional() });
 export const HeadingSchema = z.object({ level: z.number().int().min(1).max(6), text: z.string(), slug: z.string() });
-export const DocumentSchema = z.object({ id: z.string(), source: z.string(), aliases: z.array(z.string()).optional(), title: z.string(), content: z.string(), hash: z.string(), sourceCreatedDate: z.object({ date: z.iso.date(), provenance: z.literal('user-provided') }).optional(), sourceHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), metadataHash: z.string().optional(), links: z.array(LinkSchema), headings: z.array(HeadingSchema), assets: z.record(z.string(), z.string()), assetHashes: z.record(z.string(), z.string()).optional(), warnings: z.array(z.string()), available: z.boolean() });
+export const roles = ['chapter', 'prerequisite', 'related', 'evidence', 'historical', 'mirror'] as const;
+export const ProvenanceSchema = z.object({
+  identity: z.string(), importLocation: z.string(), originalLocation: z.string(),
+  capturedAt: z.iso.datetime(), fetchedAt: z.iso.datetime().optional(),
+  origin: z.enum(['source', 'user-provided']), cache: z.boolean()
+});
+export const DocumentSchema = z.object({ id: z.string(), source: z.string(), aliases: z.array(z.string()).optional(), title: z.string(), content: z.string(), hash: z.string(), sourceCreatedDate: z.object({ date: z.iso.date(), provenance: z.literal('user-provided') }).optional(), sourceHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), metadataHash: z.string().optional(), links: z.array(LinkSchema), headings: z.array(HeadingSchema), assets: z.record(z.string(), z.string()), assetHashes: z.record(z.string(), z.string()).optional(), warnings: z.array(z.string()), available: z.boolean(),
+  provenance: ProvenanceSchema.optional(), role: z.enum(roles).optional(),
+  freshness: z.enum(['unreviewed', 'current', 'historical', 'superseded']).optional(), supersededBy: z.string().optional()
+});
 export type Document = z.infer<typeof DocumentSchema>;
 export type Link = z.infer<typeof LinkSchema>;
 export interface ReadingNode { id: string; title: string; documentId?: string; children: ReadingNode[] }
@@ -22,7 +31,9 @@ export const SettingsSchema = z.object({
   pageNumbers: z.enum(['packet', 'document', 'both', 'none']).default('packet'),
   documentStyles: z.record(z.string(), z.object({ fontSize: z.number().min(8).max(24), marginMm: z.number().min(5).max(40).optional() })).default({})
 });
-export const PlanSchema = z.object({ version: z.union([z.literal(1), z.literal(2)]), createdAt: z.string(), root: z.string(), input: z.string(), head: z.string(), documents: z.array(DocumentSchema), tree: z.array(TreeSchema), candidates: z.array(z.object({ id: z.string(), title: z.string(), score: z.number(), reachable: z.number(), incoming: z.number() })), settings: SettingsSchema, warnings: z.array(z.string()) });
+export const PlanSchema = z.object({ version: z.union([z.literal(1), z.literal(2)]), createdAt: z.string(), root: z.string(), input: z.string(), head: z.string(), documents: z.array(DocumentSchema), tree: z.array(TreeSchema), candidates: z.array(z.object({ id: z.string(), title: z.string(), score: z.number(), reachable: z.number(), incoming: z.number() })), settings: SettingsSchema, warnings: z.array(z.string()),
+  discovery: z.object({ originRoot: z.string().optional(), freshnessDays: z.number().nonnegative().default(30), maxDocuments: z.number().int().positive().default(500), maxDepth: z.number().int().nonnegative().default(8) }).optional()
+});
 export type Plan = z.infer<typeof PlanSchema>;
 export const defaults = SettingsSchema.parse({});
 export function snapshotMetadataHash(doc: Document): string {
