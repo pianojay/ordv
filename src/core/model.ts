@@ -4,12 +4,24 @@ import { parseMarkdown } from './markdown.js';
 
 export const LinkSchema = z.object({ href: z.string(), label: z.string(), kind: z.enum(['markdown', 'pdf', 'web', 'anchor', 'other']), target: z.string().optional(), fragment: z.string().optional(), issue: z.string().optional() });
 export const HeadingSchema = z.object({ level: z.number().int().min(1).max(6), text: z.string(), slug: z.string() });
-export const DocumentSchema = z.object({ id: z.string(), source: z.string(), aliases: z.array(z.string()).optional(), title: z.string(), content: z.string(), hash: z.string(), sourceHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), metadataHash: z.string().optional(), links: z.array(LinkSchema), headings: z.array(HeadingSchema), assets: z.record(z.string(), z.string()), assetHashes: z.record(z.string(), z.string()).optional(), warnings: z.array(z.string()), available: z.boolean() });
+export const DocumentSchema = z.object({ id: z.string(), source: z.string(), aliases: z.array(z.string()).optional(), title: z.string(), content: z.string(), hash: z.string(), sourceCreatedDate: z.object({ date: z.iso.date(), provenance: z.literal('user-provided') }).optional(), sourceHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), metadataHash: z.string().optional(), links: z.array(LinkSchema), headings: z.array(HeadingSchema), assets: z.record(z.string(), z.string()), assetHashes: z.record(z.string(), z.string()).optional(), warnings: z.array(z.string()), available: z.boolean() });
 export type Document = z.infer<typeof DocumentSchema>;
 export type Link = z.infer<typeof LinkSchema>;
 export interface ReadingNode { id: string; title: string; documentId?: string; children: ReadingNode[] }
 const TreeSchema: z.ZodType<ReadingNode> = z.lazy(() => z.object({ id: z.string(), title: z.string(), documentId: z.string().optional(), children: z.array(TreeSchema) }));
-export const SettingsSchema = z.object({ mode: z.enum(['book', 'documents']).default('book'), paper: z.enum(['A4', 'Letter']).default('A4'), toc: z.boolean().default(true), graph: z.boolean().default(false), math: z.boolean().default(true), documentStyles: z.record(z.string(), z.object({ fontSize: z.number().min(8).max(24), marginMm: z.number().min(5).max(40) })).default({}) });
+export const SettingsSchema = z.object({
+  mode: z.enum(['book', 'documents']).default('book'),
+  paper: z.enum(['A4', 'Letter']).default('A4'),
+  toc: z.boolean().default(true), graph: z.boolean().default(false), math: z.boolean().default(true),
+  marginsMm: z.object({
+    top: z.number().min(5).max(50).default(15), right: z.number().min(5).max(50).default(10),
+    bottom: z.number().min(5).max(50).default(10), left: z.number().min(5).max(50).default(10)
+  }).default(() => ({ top: 15, right: 10, bottom: 10, left: 10 })),
+  runningHeader: z.boolean().default(true),
+  headerDate: z.enum(['export', 'source-created', 'none']).default('export'),
+  pageNumbers: z.enum(['packet', 'document', 'both', 'none']).default('packet'),
+  documentStyles: z.record(z.string(), z.object({ fontSize: z.number().min(8).max(24), marginMm: z.number().min(5).max(40).optional() })).default({})
+});
 export const PlanSchema = z.object({ version: z.union([z.literal(1), z.literal(2)]), createdAt: z.string(), root: z.string(), input: z.string(), head: z.string(), documents: z.array(DocumentSchema), tree: z.array(TreeSchema), candidates: z.array(z.object({ id: z.string(), title: z.string(), score: z.number(), reachable: z.number(), incoming: z.number() })), settings: SettingsSchema, warnings: z.array(z.string()) });
 export type Plan = z.infer<typeof PlanSchema>;
 export const defaults = SettingsSchema.parse({});

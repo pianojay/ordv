@@ -41,6 +41,14 @@ try {
   await page.click('.add-section button');
   const newSection = await page.$eval('input[aria-label="Section title"]', el => (el as HTMLInputElement).value); assert.equal(newSection, 'Background');
   await page.select('select[aria-label="Parent of Research notes"]', await page.$eval('select[aria-label="Parent of Research notes"]', el => [...(el as HTMLSelectElement).options].find(o => o.textContent === 'Background')!.value));
+  await page.select('select[aria-label="Page numbers"]', 'both');
+  await page.select('select[aria-label="Header date"]', 'source-created');
+  await page.click('.packet-node.head .node-title');
+  await page.waitForSelector('input[aria-label="Source creation date"]');
+  await page.$eval('input[aria-label="Source creation date"]', el => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, '2026-10-01');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
   const saved = await page.evaluate(async () => {
     const original = URL.createObjectURL; let captured: Blob | undefined;
     URL.createObjectURL = value => { captured = value as Blob; return original(value); };
@@ -50,10 +58,15 @@ try {
     return captured.text();
   });
   const edited = validatePlan(JSON.parse(saved)); assert(edited.tree.some(n => n.title === 'Background'));
+  assert.equal(edited.settings.pageNumbers, 'both');
+  assert.equal(edited.settings.headerDate, 'source-created');
+  assert.deepEqual(edited.settings.marginsMm, { top: 15, right: 10, bottom: 10, left: 10 });
+  assert.equal(edited.documents.find(d => d.id === edited.head)!.sourceCreatedDate?.date, '2026-10-01');
   await fs.writeFile('output/acceptance/edited-plan.json', saved);
   await (await page.$('input[type=file]'))!.uploadFile('output/acceptance/edited-plan.json');
   await page.waitForFunction(() => document.querySelector('.status') === null);
   assert.equal(await count(), '5 selected');
+  assert.equal(await page.$eval('select[aria-label="Page numbers"]', el => (el as HTMLSelectElement).value), 'both');
   await page.screenshot({ path: 'output/acceptance/editor.png', fullPage: true });
   await page.click('.workspace-bar nav button:nth-child(2)');
   await page.waitForSelector('iframe', { timeout: 15000 });
@@ -71,7 +84,8 @@ try {
   const token = new URL(url).searchParams.get('token')!;
   assert.equal((await fetch('http://127.0.0.1:4318/api/plan', { headers: { 'x-packet-token': token, origin: 'https://untrusted.example' } })).status, 403);
   assert.equal((await fetch('http://127.0.0.1:4318/api/preview', { method: 'POST', headers: { 'content-type': 'application/json', 'x-packet-token': token }, body: '{"version":2}' })).status, 400);
-  const response = await fetch('http://127.0.0.1:4318/api/export', { method: 'POST', headers: { 'content-type': 'application/json', 'x-packet-token': token }, body: JSON.stringify(plan) });
+  edited.settings.mode = 'documents';
+  const response = await fetch('http://127.0.0.1:4318/api/export', { method: 'POST', headers: { 'content-type': 'application/json', 'x-packet-token': token }, body: JSON.stringify(edited) });
   assert.equal(response.status, 200); assert.equal(response.headers.get('content-type'), 'application/pdf');
   assert(Buffer.from(await response.arrayBuffer()).subarray(0, 4).toString() === '%PDF');
   console.log('UI acceptance passed: graph selection, sections, reparenting, plan save/load, Mermaid/math preview, responsive layout, API access checks, HTTP export; no browser errors.');

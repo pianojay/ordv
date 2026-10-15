@@ -9,6 +9,7 @@ export function mathErrors(plan: Plan): string[] {
 export function diagnostics(plan: Plan): string[] {
   const ids = new Set(flatten(plan.tree)), out = [...plan.warnings, ...mathErrors(plan)];
   for (const d of plan.documents.filter(d => ids.has(d.id))) {
+    if (plan.settings.runningHeader && plan.settings.headerDate === 'source-created' && !d.sourceCreatedDate) out.push(`${d.title}: source creation date is unavailable; the running-header date will be blank (no export-date fallback)`);
     if (!d.available) out.push(`${d.title}: selected document is unavailable`);
     out.push(...d.warnings.map(w => `${d.title}: ${w}`));
     for (const href of new Set(parseMarkdown(d.content).images)) {

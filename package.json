@@ -12,7 +12,8 @@
     "test:remote": "tsx tests/remote.ts",
     "test:ui": "tsx tests/ui.ts",
     "ordv": "tsx src/cli.ts",
-    "test:style": "tsx tests/style-acceptance.ts"
+    "test:style": "tsx tests/style-acceptance.ts",
+    "test:marginals": "tsx tests/marginals-acceptance.ts"
   },
   "dependencies": {
     "@noble/hashes": "^2.4.0",
