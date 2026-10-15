@@ -3,4 +3,3 @@
 .export-options>label{gap:8px}.export-options>label>input[type=number]{width:80px;padding:7px}.document-style input[type=date]{width:150px}.export-options>small{display:block;margin-top:12px;color:var(--muted);font-size:10px;line-height:1.5}
 
 .source-options{padding:8px 32px;border-bottom:1px solid #d9e2df}.source-options label{display:inline-flex;gap:8px;margin:8px 18px 4px 0;align-items:center}.source-options input:not([type=checkbox]){width:300px}.source-options small{display:block}.freshness-control{display:block;padding:12px 20px}.inspector label{font-size:12px}.inspector{flex-wrap:wrap;gap:12px}
-

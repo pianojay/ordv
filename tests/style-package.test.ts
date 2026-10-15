@@ -18,4 +18,3 @@ it('keeps preset assets and notices in the npm distribution', () => {
     expect(files.has(`assets/styles/vscode/${name}`)).toBe(true);
   }
 }, 30000);
-
