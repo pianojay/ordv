@@ -24,9 +24,11 @@ it('keeps explicit scope separate from head and retains GitHub line links as ref
     await expect(discover(input, { root: path.join(root, 'elsewhere') })).rejects.toThrow();
     p.documents[1].role = 'evidence'; p.documents[1].freshness = 'superseded'; p.documents[1].supersededBy = 'new report';
     p.tree = [{ id: 'section', title: 'Read this', children: p.tree }];
+    await fs.writeFile(input, '# Head\n[web](https://github.com/a/b/blob/main/file.md#L3-L8)');
     const updated = await refreshPlan(p);
     expect(updated.tree).toEqual(p.tree);
-    expect(updated.documents[1].role).toBe('evidence');
+    expect(updated.documents.find(d => d.title === 'Parent')?.role).toBe('evidence');
+    expect(updated.documents.find(d => d.title === 'Parent')?.available).toBe(true);
     expect(validatePlan(JSON.parse(JSON.stringify(updated)))).toEqual(updated);
     expect(flatten(updated.tree)).toEqual(flatten(p.tree));
     expect(diagnosticRecords(updated).some(d => d.code === 'SOURCE_SUPERSEDED')).toBe(true);

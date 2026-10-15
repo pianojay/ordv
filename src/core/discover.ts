@@ -69,6 +69,9 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
       doc.provenance = { identity: doc.id, importLocation: source, originalLocation: options.originRoot && !remote(source)
         ? `${options.originRoot.replace(/\/$/, '')}/${path.relative(root, source).split(path.sep).map(encodeURIComponent).join('/')}` : base,
         capturedAt: new Date().toISOString(), fetchedAt, cache: cached, origin: options.originRoot && !remote(source) ? 'user-provided' : 'source' };
+      // Graph IDs identify this captured collection; source identity follows the
+      // original location even when a transferred collection changes import root.
+      doc.provenance.identity = checksum(doc.provenance.originalLocation).slice(0, 16);
       const parsed = parseMarkdown(doc.content); doc.headings = parsed.headings;
       doc.title = parsed.headings.find(h => h.level === 1)?.text || doc.title;
       for (const raw of parsed.links) {
@@ -117,7 +120,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
   for (const d of docs) for (const l of d.links) {
     if (l.target) {
       const target = byId.get(l.target);
-      if (!target || !target.available) l.issue ||= 'Target document is unavailable';
+      if (!target || !target.available) l.issue ||= `Target document is unavailable${target?.warnings.some(w => /escapes.*root/.test(w)) ? ': file escapes the authorized root' : ''}`;
       else if (l.fragment && !target.headings.some(h => h.slug === l.fragment)) l.issue ||= `Unresolved heading #${l.fragment}`;
     }
   }
@@ -144,6 +147,14 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
 export async function refreshPlan(value: Plan, options: Pick<DiscoverOptions, 'fetcher' | 'cacheDir'> = {}): Promise<Plan> {
   const next = await discover(value.input, { ...value.discovery, ...options, root: value.root, refresh: true });
   const old = new Map(value.documents.map(d => [d.id, d]));
+  const selected = new Set(value.tree.flatMap(function ids(n): string[] { return [...(n.documentId ? [n.documentId] : []), ...n.children.flatMap(ids)]; }));
+  for (const previous of value.documents) {
+    if (!selected.has(previous.id) || next.documents.some(d => d.id === previous.id)) continue;
+    try {
+      const captured = await discover(previous.source, { ...value.discovery, ...options, root: value.root, refresh: true });
+      for (const d of captured.documents) if (!next.documents.some(v => v.id === d.id) && next.documents.length < (value.discovery?.maxDocuments ?? 500)) next.documents.push(d);
+    } catch { /* Unavailable selected sources are retained below as placeholders. */ }
+  }
   for (const d of next.documents) {
     const previous = old.get(d.id);
     if (previous) { d.role = previous.role; d.freshness = previous.freshness; d.supersededBy = previous.supersededBy; d.sourceCreatedDate = previous.sourceCreatedDate; }
