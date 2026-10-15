@@ -4,8 +4,9 @@ import path from 'node:path';
 import os from 'node:os';
 import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRef, PDFString, PDFHexString } from 'pdf-lib';
 import { flatten, validatePlan, type Plan } from './model.js';
-import { renderHTML, diagnostics } from './render.js';
+import { renderHTML, diagnostics, destination } from './render.js';
 import { mathErrors } from './diagnostics.js';
+import { printOptions, pageLabels, marginalHTML } from './marginals.js';
 
 export async function launchBrowser(): Promise<{ browser: Browser; close: () => Promise<void> }> {
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'reading-packet-browser-'));
@@ -18,7 +19,7 @@ export async function launchBrowser(): Promise<{ browser: Browser; close: () => 
 }
 import { existsSync as requireExists } from 'node:fs';
 
-async function print(browser: Browser, html: string, plan: Plan, margin = 18): Promise<Uint8Array> {
+async function print(browser: Browser, html: string, plan: Plan, margin?: number): Promise<Uint8Array> {
   const page = await browser.newPage();
   try {
     await page.setRequestInterception(true);
@@ -27,7 +28,33 @@ async function print(browser: Browser, html: string, plan: Plan, margin = 18): P
     await page.waitForFunction('window.packetReady === true', { timeout: 30000 });
     const errors = await page.evaluate(() => (window as any).packetErrors as string[]);
     if (errors.length) throw new Error(errors.join('; '));
-    return await page.pdf({ format: plan.settings.paper, printBackground: true, margin: { top: `${margin}mm`, right: `${margin}mm`, bottom: `${margin}mm`, left: `${margin}mm` } });
+    return await page.pdf(printOptions(plan, margin));
+  } finally { await page.close(); }
+}
+async function addMarginals(browser: Browser, bytes: Uint8Array, plan: Plan, exportedAt: Date): Promise<Uint8Array> {
+  if (!plan.settings.runningHeader && plan.settings.pageNumbers === 'none') return bytes;
+  const pdf = await PDFDocument.load(bytes), pages = pdf.getPages();
+  const pageIndex = new Map(pages.map((p, i) => [p.ref.toString(), i]));
+  const names = namedDestinations(pdf), starts = new Map<string, number>();
+  for (const id of flatten(plan.tree)) {
+    const dest = names.get(destination(id));
+    const index = dest ? pageIndex.get(dest.get(0).toString()) : undefined;
+    if (index !== undefined) starts.set(id, index);
+  }
+  const labels = pageLabels(plan, starts, pages.length, exportedAt), { width, height } = pages[0].getSize();
+  const page = await browser.newPage();
+  try {
+    await page.setRequestInterception(true);
+    page.on('request', request => /^(data:|about:|blob:)/.test(request.url()) ? request.continue() : request.abort());
+    await page.setContent(marginalHTML(labels, width, height, plan.settings.runningHeader), { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
+    const overlay = await page.pdf({ width: `${width / 72}in`, height: `${height / 72}in`, margin: { top: 0, right: 0, bottom: 0, left: 0 },
+      scale: 1, displayHeaderFooter: false, printBackground: false, omitBackground: true, preferCSSPageSize: true });
+    const layer = await PDFDocument.load(overlay);
+    if (layer.getPageCount() !== pages.length) throw new Error('Header/footer pagination does not match the assembled PDF');
+    const embedded = await pdf.embedPages(layer.getPages());
+    pages.forEach((p, i) => p.drawPage(embedded[i], { x: 0, y: 0, width: p.getWidth(), height: p.getHeight() }));
+    return pdf.save();
   } finally { await page.close(); }
 }
 function pdfText(value: any): string | undefined {
@@ -112,6 +139,9 @@ export async function assemblePDF(parts: Uint8Array[]): Promise<Uint8Array> {
 }
 export async function exportPDF(value: Plan): Promise<{ bytes: Uint8Array; warnings: string[] }> {
   const plan = validatePlan(value), ids = flatten(plan.tree);
+  const exportedAt = new Date();
+  printOptions(plan);
+  if (plan.settings.mode === 'documents') for (const id of ids) printOptions(plan, plan.settings.documentStyles[id]?.marginMm);
   if (!ids.length) throw new Error('Select at least one document');
   const invalidMath = mathErrors(plan);
   if (invalidMath.length) throw new Error(`Math preflight failed:\n${invalidMath.join('\n')}`);
@@ -130,6 +160,7 @@ export async function exportPDF(value: Plan): Promise<{ bytes: Uint8Array; warni
       const html = i === 0 ? firstHTML : await renderHTML(plan, id, navigation);
       parts.push(await print(browser, html, plan, id ? plan.settings.documentStyles[id]?.marginMm : undefined));
     }
-    return { bytes: await assemblePDF(parts), warnings: diagnostics(plan) };
+    const bytes = await addMarginals(browser, await assemblePDF(parts), plan, exportedAt);
+    return { bytes, warnings: diagnostics(plan) };
   } finally { await close(); }
 }

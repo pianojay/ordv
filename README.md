@@ -99,3 +99,7 @@ Agent skill/MCP/plugin integrations are planned. The standalone VS Code styling 
 ## Default reading style
 
 The standalone default uses pinned VS Code and yzane Markdown PDF CSS, with the original highlight.js theme. Full third-party notices accompany the source and rendered HTML. See [licensing and compatibility](docs/style-licensing.md) for print-setting differences and redistribution requirements. Run `npm run test:style` for the layout fixture.
+
+## Running headers and page numbers
+
+The default print profile uses yzane’s declared A4 portrait settings: 15 mm top and 10 mm other paper margins, filename/UTC export-date headers, and packet-wide page numbers. The editor and CLI also support document-relative or combined numbering, custom margins, and explicitly supplied source-creation dates. See [marginals and print settings](docs/marginals.md) for options and provenance rules. Verify both modes with `npm run test:marginals` (Chromium and Poppler required).

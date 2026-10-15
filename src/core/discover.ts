@@ -128,7 +128,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
   }).sort((a, b) => b.score - a.score || byId.get(a.id)!.source.localeCompare(byId.get(b.id)!.source));
   const head = directory ? candidates[0]?.id : docs[0].id;
   if (!head || !byId.get(head)?.available) throw new Error(`Cannot read the head document: ${docs[0]?.warnings.join('; ') || input}`);
-  return { version: 2, createdAt: new Date().toISOString(), root, input, head, documents: docs, tree: suggestedTree(docs, head), candidates, settings: { ...defaults, documentStyles: {} }, warnings };
+  return { version: 2, createdAt: new Date().toISOString(), root, input, head, documents: docs, tree: suggestedTree(docs, head), candidates, settings: structuredClone(defaults), warnings };
 }
 async function scan(root: string): Promise<string[]> {
   const files: string[] = [];

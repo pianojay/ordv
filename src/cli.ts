@@ -21,10 +21,32 @@ command.command('serve').alias('open').argument('[source]', 'Optional initial do
   const { url } = await serve({ port, input, plan, production: !!opts.production });
   console.log(`ordv editor: ${url}\nPress Ctrl+C to stop.`);
 });
-command.command('export').argument('<plan>', 'Saved JSON reading plan').requiredOption('-o, --output <file>', 'Output PDF').option('--mode <mode>', 'book or documents').option('--graph', 'Include the relationship graph').action(async (file, opts) => {
+command.command('export').argument('<plan>', 'Saved JSON reading plan').requiredOption('-o, --output <file>', 'Output PDF').option('--mode <mode>', 'book or documents').option('--graph', 'Include the relationship graph')
+  .option('--page-numbers <scope>', 'packet, document, both, or none')
+  .option('--header-date <date>', 'export (UTC), source-created, or none')
+  .option('--running-header', 'Show the filename/date running header')
+  .option('--no-running-header', 'Hide the filename/date running header')
+  .option('--margins <mm>', 'Paper margins in mm: top,right,bottom,left')
+  .option('--source-date <id=date>', 'User-supplied creation date (YYYY-MM-DD) for a document ID; repeatable', (value: string, previous: string[]) => [...previous, value], [])
+  .action(async (file, opts) => {
   const plan = validatePlan(JSON.parse(await fs.readFile(file, 'utf8')));
   if (opts.mode) plan.settings.mode = opts.mode;
   if (opts.graph) plan.settings.graph = true;
+  if (opts.pageNumbers) plan.settings.pageNumbers = opts.pageNumbers;
+  if (opts.headerDate) plan.settings.headerDate = opts.headerDate;
+  if (typeof opts.runningHeader === 'boolean') plan.settings.runningHeader = opts.runningHeader;
+  if (opts.margins) {
+    const values = opts.margins.split(',').map(Number);
+    if (values.length !== 4 || values.some((n: number) => !Number.isFinite(n))) throw new Error('Margins must be top,right,bottom,left in millimeters');
+    const [top, right, bottom, left] = values;
+    plan.settings.marginsMm = { top, right, bottom, left };
+  }
+  for (const value of opts.sourceDate) {
+    const [id, date, extra] = value.split('=');
+    const doc = plan.documents.find(d => d.id === id);
+    if (!doc || !date || extra !== undefined) throw new Error('Source date must be an existing document ID=YYYY-MM-DD');
+    doc.sourceCreatedDate = { date, provenance: 'user-provided' };
+  }
   const result = await exportPDF(validatePlan(plan));
   await fs.mkdir(path.dirname(path.resolve(opts.output)), { recursive: true });
   await fs.writeFile(opts.output, result.bytes);

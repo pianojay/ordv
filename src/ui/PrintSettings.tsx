@@ -1,0 +1,20 @@
+import React from 'react';
+import type { Plan, Document } from '../core/model';
+
+export function PrintSettings({ plan, focused, change }: { plan: Plan; focused?: Document; change: (edit: (plan: Plan) => void) => void }) {
+  return <div className="export-options"><span className="step">03 / PRINT SETTINGS</span>
+    <label>PDF mode<select aria-label="PDF mode" value={plan.settings.mode} onChange={e => change(p => { p.settings.mode = e.target.value as Plan['settings']['mode']; })}><option value="book">Unified book</option><option value="documents">Per-document packet</option></select></label>
+    <label>Paper<select aria-label="Paper size" value={plan.settings.paper} onChange={e => change(p => { p.settings.paper = e.target.value as Plan['settings']['paper']; })}><option>A4</option><option>Letter</option></select></label>
+    {(['top', 'right', 'bottom', 'left'] as const).map(side => <label key={side}>{side[0].toUpperCase() + side.slice(1)} margin (mm)<input aria-label={`${side} margin`} type="number" min="5" max="50" value={plan.settings.marginsMm[side]} onChange={e => change(p => { p.settings.marginsMm[side] = Number(e.target.value); })}/></label>)}
+    <label className="checkbox"><input aria-label="Running header" type="checkbox" checked={plan.settings.runningHeader} onChange={e => change(p => { p.settings.runningHeader = e.target.checked; })}/>Filename / date running header</label>
+    <label>Date in header<select aria-label="Header date" value={plan.settings.headerDate} onChange={e => change(p => { p.settings.headerDate = e.target.value as Plan['settings']['headerDate']; })}><option value="export">Export date (UTC, yzane default)</option><option value="source-created">Source creation date (user supplied)</option><option value="none">No date</option></select></label>
+    <label>Page numbers<select aria-label="Page numbers" value={plan.settings.pageNumbers} onChange={e => change(p => { p.settings.pageNumbers = e.target.value as Plan['settings']['pageNumbers']; })}><option value="packet">Packet current / total</option><option value="document">Document current / total</option><option value="both">Document and packet</option><option value="none">None</option></select></label>
+    {(['toc', 'graph', 'math'] as const).map(key => <label className="checkbox" key={key}><input type="checkbox" checked={plan.settings[key]} onChange={e => change(p => { p.settings[key] = e.target.checked; })}/>{({ toc: 'Tree table of contents', graph: 'Print relationship graph (up to 30 documents)', math: 'Render math formulas' })[key]}</label>)}
+    {focused && <div className="document-style"><small>Source metadata for {focused.title}</small><label>Creation date (user supplied)<input aria-label="Source creation date" type="date" value={focused.sourceCreatedDate?.date || ''} onChange={e => change(p => { const doc = p.documents.find(d => d.id === focused.id)!; doc.sourceCreatedDate = e.target.value ? { date: e.target.value, provenance: 'user-provided' } : undefined; })}/></label></div>}
+    {plan.settings.mode === 'documents' && focused && <div className="document-style"><small>Style for {focused.title}</small>
+      <label>Font size<input aria-label="Document font size" type="number" min="8" max="24" value={plan.settings.documentStyles[focused.id]?.fontSize ?? 10.5} onChange={e => change(p => { p.settings.documentStyles[focused.id] = { ...(p.settings.documentStyles[focused.id] || {}), fontSize: Math.min(24, Math.max(8, Number(e.target.value))) }; })}/></label>
+      <label>Uniform margin override (mm)<input aria-label="Document margin" type="number" min="5" max="40" placeholder="Use profile margins" value={plan.settings.documentStyles[focused.id]?.marginMm ?? ''} onChange={e => change(p => { p.settings.documentStyles[focused.id] = { ...(p.settings.documentStyles[focused.id] || { fontSize: 10.5 }), marginMm: e.target.value === '' ? undefined : Number(e.target.value) }; })}/></label>
+    </div>}
+    <small>Paper margins exclude body padding. Headers/page numbers need at least 10 mm top/bottom. Final headers and page numbers appear in the exported PDF.</small>
+  </div>;
+}
