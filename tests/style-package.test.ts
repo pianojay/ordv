@@ -10,9 +10,10 @@ it('keeps preset assets and notices in the npm distribution', () => {
   const result = JSON.parse(execFileSync(process.execPath, [npm, 'pack', '--dry-run', '--json', '--ignore-scripts'], { encoding: 'utf8' }));
   const files = new Set(result[0].files.map((f: { path: string }) => f.path));
   expect(files.has('THIRD_PARTY_NOTICES.md')).toBe(true);
-  expect(files.has('src/core/style.ts')).toBe(true);
+  expect(files.has('dist/core/style.js')).toBe(true);
   const manifest = require('../assets/styles/vscode/manifest.json');
   for (const name of ['manifest.json', ...Object.keys(manifest.files)]) {
     expect(files.has(`assets/styles/vscode/${name}`)).toBe(true);
   }
 }, 30000);
+
