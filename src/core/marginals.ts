@@ -8,6 +8,7 @@ export function printOptions(plan: Plan, override?: number): PDFOptions {
   if (plan.settings.runningHeader && mm.top < 10) throw new Error('Running headers require a top margin of at least 10 mm');
   if (plan.settings.pageNumbers !== 'none' && mm.bottom < 10) throw new Error('Page numbers require a bottom margin of at least 10 mm');
   return { format: plan.settings.paper, landscape: false, scale: 1, printBackground: true,
+    preferCSSPageSize: plan.settings.figures === 'readable',
     // Dynamic source headers and final counters are overlaid after assembly.
     displayHeaderFooter: plan.settings.runningHeader || plan.settings.pageNumbers !== 'none',
     headerTemplate: '<span></span>', footerTemplate: '<span></span>',

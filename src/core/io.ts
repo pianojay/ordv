@@ -40,7 +40,7 @@ export async function checkURL(value: string) {
   if (!addresses.length || addresses.some(a => !publicAddress(a.address))) throw new Error('Private or local network URLs are not supported');
   return u;
 }
-export interface FetchResult { data: Buffer; type: string; url: string }
+export interface FetchResult { data: Buffer; type: string; url: string; fetchedAt?: string; cached?: boolean }
 export type Fetcher = (url: string, maxBytes: number, refresh: boolean) => Promise<FetchResult>;
 async function publicRequest(url: URL, maxBytes: number, signal: AbortSignal): Promise<{ status: number; headers: import('node:http').IncomingHttpHeaders; data: Buffer }> {
   return new Promise((resolve, reject) => {
@@ -68,7 +68,7 @@ async function publicRequest(url: URL, maxBytes: number, signal: AbortSignal): P
     request.on('error', reject); request.end();
   });
 }
-export function cachedFetcher(cacheDir: string): Fetcher {
+export function cachedFetcher(cacheDir: string, offline = false): Fetcher {
   return async (url, maxBytes, refresh) => {
     const cacheFile = path.join(cacheDir, `${hash(url)}.json`);
     if (!refresh) {
@@ -76,9 +76,10 @@ export function cachedFetcher(cacheDir: string): Fetcher {
         const cached = JSON.parse(await fs.readFile(cacheFile, 'utf8'));
         const data = Buffer.from(cached.data, 'base64');
         if (data.length > maxBytes) throw new Error('Cached resource exceeds the size limit');
-        return { data, type: cached.type, url: cached.url };
+        return { data, type: cached.type, url: cached.url, fetchedAt: cached.fetchedAt, cached: true };
       } catch (e: any) { if (e.code !== 'ENOENT' && !(e instanceof SyntaxError)) throw e; }
     }
+    if (offline) throw new Error('Offline cache miss; rediscover online or use a saved snapshot');
     let next = url;
     const signal = AbortSignal.timeout(15000);
     for (let redirects = 0; redirects <= 5; redirects++) {
@@ -90,13 +91,19 @@ export function cachedFetcher(cacheDir: string): Fetcher {
         next = new URL(location, checked).href; continue;
       }
       if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}`);
-      const result = { data: response.data, type: (response.headers['content-type'] || '').split(';')[0], url: checked.href };
+      const result = { data: response.data, type: (response.headers['content-type'] || '').split(';')[0], url: checked.href, fetchedAt: new Date().toISOString(), cached: false };
       await fs.mkdir(cacheDir, { recursive: true });
       await fs.writeFile(cacheFile, JSON.stringify({ ...result, data: result.data.toString('base64') }));
       return result;
     }
     throw new Error('Too many redirects');
   };
+}
+/** GitHub blob pages are HTML references, including #Lx-Ly line links. */
+export function githubBlob(source: string): boolean {
+  if (!remote(source)) return false;
+  const u = new URL(source);
+  return u.hostname.toLowerCase() === 'github.com' && /^\/[^/]+\/[^/]+\/blob\//.test(u.pathname);
 }
 export function resolveReference(source: string, href: string): { source?: string; fragment?: string } {
   if (href.startsWith('#')) return { source, fragment: decodeURIComponent(href.slice(1)) };

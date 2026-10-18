@@ -5,17 +5,29 @@ import os from 'node:os';
 import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRef, PDFString, PDFHexString } from 'pdf-lib';
 import { flatten, validatePlan, type Plan } from './model.js';
 import { renderHTML, diagnostics, destination } from './render.js';
-import { mathErrors } from './diagnostics.js';
+import { mathErrors, diagnosticRecords, type Diagnostic } from './diagnostics.js';
 import { printOptions, pageLabels, marginalHTML } from './marginals.js';
 
-export async function launchBrowser(): Promise<{ browser: Browser; close: () => Promise<void> }> {
+export async function launchBrowser(options: { signal?: AbortSignal; executablePath?: string } = {}): Promise<{ browser: Browser; close: () => Promise<void> }> {
+  options.signal?.throwIfAborted();
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'reading-packet-browser-'));
-  const candidates = [process.env.PACKET_BROWSER, puppeteer.executablePath(), 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe'].filter((p): p is string => !!p);
+  const explicit = options.executablePath || process.env.ORDV_BROWSER || process.env.PACKET_BROWSER;
+  const candidates = (explicit ? [explicit] : [puppeteer.executablePath(), 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome', '/usr/bin/microsoft-edge', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']).filter((p): p is string => !!p);
   const executablePath = candidates.find(p => { try { return !!requireExists(p); } catch { return false; } });
   try {
+    if (!executablePath) throw new Error(explicit ? `Browser override does not exist: ${explicit}` : 'No installed browser found');
     const browser = await puppeteer.launch({ headless: true, executablePath, userDataDir: profile, args: ['--disable-background-networking', '--disable-component-update'] });
-    return { browser, close: async () => { await browser.close(); await fs.rm(profile, { recursive: true, force: true }); } };
-  } catch (e) { await fs.rm(profile, { recursive: true, force: true }); throw new Error(`PDF browser could not start. Set PACKET_BROWSER to Chrome/Edge/Chromium. ${String(e)}`); }
+    let closing: Promise<void> | undefined;
+    const close = () => closing ||= (async () => { options.signal?.removeEventListener('abort', abort); try { await browser.close(); } finally { await fs.rm(profile, { recursive: true, force: true }); } })();
+    const abort = () => { void close().catch(() => {}); };
+    options.signal?.addEventListener('abort', abort, { once: true });
+    if (options.signal?.aborted) { await close(); options.signal.throwIfAborted(); }
+    return { browser, close };
+  } catch (e) {
+    await fs.rm(profile, { recursive: true, force: true }); options.signal?.throwIfAborted();
+    if (/No usable sandbox|Failed to move to new namespace|Operation not permitted.*namespace/i.test(String(e))) throw new Error('PDF browser could not start: this host denies the Chromium sandbox. Use a system Chrome/Chromium with a configured sandbox or ask the host administrator to configure supported user namespaces.');
+    throw new Error(`PDF browser could not start. Install Chrome/Edge/Chromium or set --browser / ORDV_BROWSER to its executable path. ${String(e)}`);
+  }
 }
 import { existsSync as requireExists } from 'node:fs';
 
@@ -41,19 +53,24 @@ async function addMarginals(browser: Browser, bytes: Uint8Array, plan: Plan, exp
     const index = dest ? pageIndex.get(dest.get(0).toString()) : undefined;
     if (index !== undefined) starts.set(id, index);
   }
-  const labels = pageLabels(plan, starts, pages.length, exportedAt), { width, height } = pages[0].getSize();
+  const labels = pageLabels(plan, starts, pages.length, exportedAt);
+  const groups = new Map<string, number[]>();
+  pages.forEach((p, i) => { const key = `${p.getWidth()}:${p.getHeight()}`; const indices = groups.get(key) || []; indices.push(i); groups.set(key, indices); });
   const page = await browser.newPage();
   try {
     await page.setRequestInterception(true);
     page.on('request', request => /^(data:|about:|blob:)/.test(request.url()) ? request.continue() : request.abort());
-    await page.setContent(marginalHTML(labels, width, height, plan.settings.runningHeader), { waitUntil: 'load' });
-    await page.evaluate(() => document.fonts.ready);
-    const overlay = await page.pdf({ width: `${width / 72}in`, height: `${height / 72}in`, margin: { top: 0, right: 0, bottom: 0, left: 0 },
-      scale: 1, displayHeaderFooter: false, printBackground: false, omitBackground: true, preferCSSPageSize: true });
-    const layer = await PDFDocument.load(overlay);
-    if (layer.getPageCount() !== pages.length) throw new Error('Header/footer pagination does not match the assembled PDF');
-    const embedded = await pdf.embedPages(layer.getPages());
-    pages.forEach((p, i) => p.drawPage(embedded[i], { x: 0, y: 0, width: p.getWidth(), height: p.getHeight() }));
+    for (const indices of groups.values()) {
+      const { width, height } = pages[indices[0]].getSize();
+      await page.setContent(marginalHTML(indices.map(i => labels[i]), width, height, plan.settings.runningHeader), { waitUntil: 'load' });
+      await page.evaluate(() => document.fonts.ready);
+      const overlay = await page.pdf({ width: `${width / 72}in`, height: `${height / 72}in`, margin: { top: 0, right: 0, bottom: 0, left: 0 },
+        scale: 1, displayHeaderFooter: false, printBackground: false, omitBackground: true, preferCSSPageSize: true });
+      const layer = await PDFDocument.load(overlay);
+      if (layer.getPageCount() !== indices.length) throw new Error('Header/footer pagination does not match the assembled PDF');
+      const embedded = await pdf.embedPages(layer.getPages());
+      indices.forEach((index, i) => { const p = pages[index]; p.drawPage(embedded[i], { x: 0, y: 0, width: p.getWidth(), height: p.getHeight() }); });
+    }
     return pdf.save();
   } finally { await page.close(); }
 }
@@ -137,7 +154,8 @@ export async function assemblePDF(parts: Uint8Array[]): Promise<Uint8Array> {
   output.setTitle('ordv reading edition'); output.setProducer('ordv');
   return output.save();
 }
-export async function exportPDF(value: Plan): Promise<{ bytes: Uint8Array; warnings: string[] }> {
+export async function exportPDF(value: Plan, options: { signal?: AbortSignal; executablePath?: string } = {}): Promise<{ bytes: Uint8Array; warnings: string[]; diagnostics: Diagnostic[] }> {
+  options.signal?.throwIfAborted();
   const plan = validatePlan(value), ids = flatten(plan.tree);
   const exportedAt = new Date();
   printOptions(plan);
@@ -152,15 +170,17 @@ export async function exportPDF(value: Plan): Promise<{ bytes: Uint8Array; warni
     ...(plan.settings.toc || plan.settings.graph ? [{ navigation: true }] : []), ...ids.map(id => ({ id }))
   ];
   const firstHTML = await renderHTML(plan, jobs[0].id, jobs[0].navigation);
-  const { browser, close } = await launchBrowser();
+  const { browser, close } = await launchBrowser(options);
   try {
     const parts: Uint8Array[] = [];
     for (let i = 0; i < jobs.length; i++) {
+      options.signal?.throwIfAborted();
       const { id, navigation } = jobs[i];
       const html = i === 0 ? firstHTML : await renderHTML(plan, id, navigation);
       parts.push(await print(browser, html, plan, id ? plan.settings.documentStyles[id]?.marginMm : undefined));
     }
     const bytes = await addMarginals(browser, await assemblePDF(parts), plan, exportedAt);
-    return { bytes, warnings: diagnostics(plan) };
-  } finally { await close(); }
+    options.signal?.throwIfAborted();
+    return { bytes, warnings: diagnostics(plan), diagnostics: diagnosticRecords(plan) };
+  } catch (e) { options.signal?.throwIfAborted(); throw e; } finally { await close(); }
 }

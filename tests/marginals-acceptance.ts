@@ -148,7 +148,7 @@ try {
 } finally { await close(); }
 
 // CLI consumes the exact same snapshot and settings as the editor/core API.
-execFileSync(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'src/cli.ts', 'export', path.join(out, 'plan.json'), '-o', path.join(out, 'cli.pdf'), '--mode', 'book', '--page-numbers', 'both', '--header-date', 'source-created', '--margins', '15,10,10,10', '--source-date', `${plan.head}=2026-10-01`], { stdio: 'pipe' });
+execFileSync(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'src/cli.ts', 'export', path.join(out, 'plan.json'), '-o', path.join(out, 'cli.pdf'), '--force', '--mode', 'book', '--page-numbers', 'both', '--header-date', 'source-created', '--margins', '15,10,10,10', '--source-date', `${plan.head}=2026-10-01`], { stdio: 'pipe' });
 assert.deepEqual(textPages(path.join(out, 'cli.pdf')).map(p => footer(p.words, p.height)), textPages(path.join(out, 'book-both.pdf')).map(p => footer(p.words, p.height)));
 assert.deepEqual(flatten(validatePlan(JSON.parse(await fs.readFile(path.join(out, 'plan.json'), 'utf8'))).tree), flatten(plan.tree));
 await fs.writeFile(path.join(out, 'measurements.json'), JSON.stringify(measurements, null, 2));

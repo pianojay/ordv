@@ -52,6 +52,21 @@ export function parseMarkdown(content: string) {
 }
 
 export interface MathProblem { line: number; message: string }
+/** Source headings hidden by closed disclosures under the preserve print policy. */
+export function foldedVisibility(content: string): { closed: boolean; hidden: Set<string> } {
+  const tokens = parser(false).parse(content, {}), headings = parseMarkdown(content).headings;
+  const stack: boolean[] = [], hidden = new Set<string>(); let closed = false, heading = 0;
+  const reader = new HTMLParser({
+    onopentag(name, attrs) { if (name === 'details') { const folded = !Object.hasOwn(attrs, 'open'); stack.push(folded); closed ||= folded; } },
+    onclosetag(name) { if (name === 'details') stack.pop(); }
+  });
+  for (const token of tokens) {
+    if (token.type === 'html_block') reader.write(token.content);
+    if (token.type === 'heading_open') { const h = headings[heading++]; if (h && stack.some(Boolean)) hidden.add(h.slug); }
+    for (const child of token.children || []) if (child.type === 'html_inline') reader.write(child.content);
+  }
+  reader.end(); return { closed, hidden };
+}
 export function mathProblems(content: string): MathProblem[] {
   const result: MathProblem[] = [];
   const tokens = parser(true).parse(content, {});

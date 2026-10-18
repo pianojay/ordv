@@ -1,8 +1,12 @@
 import React from 'react';
-import type { Plan, Document } from '../core/model';
+import { applyReadingProfile, type Plan, type Document } from '../core/model';
 
 export function PrintSettings({ plan, focused, change }: { plan: Plan; focused?: Document; change: (edit: (plan: Plan) => void) => void }) {
   return <div className="export-options"><span className="step">03 / PRINT SETTINGS</span>
+    <label>Reading profile<select aria-label="Reading profile" value={plan.settings.readingProfile} onChange={e => change(p => applyReadingProfile(p, e.target.value as Plan['settings']['readingProfile']))}><option value="standard">Standard</option><option value="tablet">Tablet annotation (wide right margin)</option><option value="duplex">Duplex print (binding space on both sides)</option></select></label>
+    <label>Contents detail<select aria-label="TOC detail" value={plan.settings.tocDepth} onChange={e => change(p => { p.settings.tocDepth = Number(e.target.value); })}><option value="0">Sections and documents only</option>{[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>Through heading level {n}</option>)}</select></label>
+    <label>Folded answers<select aria-label="Folded answers" value={plan.settings.answers} onChange={e => change(p => { p.settings.answers = e.target.value as Plan['settings']['answers']; })}><option value="preserve">Preserve source visibility</option><option value="expand">Expand all answers</option><option value="appendix">Source answer appendix</option></select></label>
+    <label>Figures<select aria-label="Figure handling" value={plan.settings.figures} onChange={e => change(p => { p.settings.figures = e.target.value as Plan['settings']['figures']; })}><option value="fit">Fit in portrait</option><option value="readable">Landscape pages and readable diagram tiles</option></select></label>
     <label>PDF mode<select aria-label="PDF mode" value={plan.settings.mode} onChange={e => change(p => { p.settings.mode = e.target.value as Plan['settings']['mode']; })}><option value="book">Unified book</option><option value="documents">Per-document packet</option></select></label>
     <label>Paper<select aria-label="Paper size" value={plan.settings.paper} onChange={e => change(p => { p.settings.paper = e.target.value as Plan['settings']['paper']; })}><option>A4</option><option>Letter</option></select></label>
     {(['top', 'right', 'bottom', 'left'] as const).map(side => <label key={side}>{side[0].toUpperCase() + side.slice(1)} margin (mm)<input aria-label={`${side} margin`} type="number" min="5" max="50" value={plan.settings.marginsMm[side]} onChange={e => change(p => { p.settings.marginsMm[side] = Number(e.target.value); })}/></label>)}
