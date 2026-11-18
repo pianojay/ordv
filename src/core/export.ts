@@ -34,12 +34,25 @@ import { existsSync as requireExists } from 'node:fs';
 async function print(browser: Browser, html: string, plan: Plan, margin?: number): Promise<Uint8Array> {
   const page = await browser.newPage();
   try {
+    const mm = margin === undefined ? plan.settings.marginsMm : { left: margin, right: margin };
+    const printableWidth = ((plan.settings.paper === 'A4' ? 210 : 215.9) - mm.left - mm.right) * 96 / 25.4;
+    await page.setViewport({ width: Math.floor(printableWidth), height: 1000 });
+    await page.emulateMediaType('print');
     await page.setRequestInterception(true);
     page.on('request', request => /^(data:|about:|blob:)/.test(request.url()) ? request.continue() : request.abort());
     await page.setContent(html, { waitUntil: 'load', timeout: 30000 });
     await page.waitForFunction('window.packetReady === true', { timeout: 30000 });
     const errors = await page.evaluate(() => (window as any).packetErrors as string[]);
     if (errors.length) throw new Error(errors.join('; '));
+    const overflow = await page.evaluate(() => {
+      const width = document.documentElement.clientWidth;
+      return [...document.querySelectorAll('.doc *, .navigation *, .graph-page *')].filter(el => {
+        if (el.closest('.readable-figure, .mermaid, svg, .katex')) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && (rect.right > width + 1 || rect.left < -1);
+      }).slice(0, 3).map(el => `${el.tagName.toLowerCase()}: ${(el.textContent || '').trim().slice(0, 80)}`);
+    });
+    if (overflow.length) throw new Error(`Print layout overflow would shrink or clip the PDF. Shorten or reformat the overflowing content: ${overflow.join('; ')}`);
     return await page.pdf(printOptions(plan, margin));
   } finally { await page.close(); }
 }

@@ -23,7 +23,7 @@ h1,h2,h3,h4,h5,h6{break-after:avoid}a{color:#007acc}.heading-link{color:inherit}
 .doc,.navigation,.graph-page{break-before:page}.doc:first-child,.navigation:first-child{break-before:auto}
 .doc[style^="font-size"]{line-height:1.5714286}
 .toc ul{list-style:none;padding-left:18px}.toc>ul{padding-left:0}.toc li{margin:6px 0}.toc .heading-entry{font-size:12px}
-thead{display:table-header-group}tr{break-inside:avoid}table{max-width:100%}img,svg{max-width:100%;height:auto}
+thead{display:table-header-group}tr{break-inside:avoid}table{max-width:100%;width:100%}th,td{min-width:6em;overflow-wrap:anywhere}td code,th code{white-space:normal;overflow-wrap:anywhere}img,svg{max-width:100%;height:auto}
 .missing,.reference-note{color:#97501c;font-size:12px}.mermaid{display:flex;justify-content:center;break-inside:avoid}.mermaid svg{max-height:550px}
 pre.mermaid{background:transparent;border:0;padding:0}pre code{white-space:pre-wrap;overflow-wrap:anywhere}
 .katex-display{overflow:visible}eqn{display:block;text-align:center;margin:1em 0}eq{display:inline}section.doc{overflow-wrap:break-word}
