@@ -11,13 +11,22 @@ generate reading editions.
   issue post -> issue branch -> commits and validation -> PR -> independent
   decision -> merge. Identify the issue before starting its implementation.
 - Start an issue branch from current `origin/main`, normally named
-  `codex/issue-<number>-<short-description>`. Reuse the existing issue branch and
-  PR when continuing its work. Do not resolve an issue by pushing directly to main.
-- Keep each PR focused on its issue. Combining issues requires explicit user
-  direction. Preserve unrelated work in the shared checkout.
+  `codex/issue-<number>-<short-description>`. For a combined set of issues, use
+  one representative issue number, defaulting to the smallest number, and a
+  description of the shared change. Issue numbers need not be contiguous; do
+  not encode a range or list of numbers in the branch name. Reuse the existing
+  issue branch and PR when continuing its work. Do not resolve issues by pushing
+  directly to main.
+- Keep each PR focused on one coherent change. When related issues can be fixed
+  and validated together within that change, combine them in one PR rather than
+  splitting solely by issue number. This does not require separate user approval.
+  Split work when the fixes are independently reviewable changes with unrelated
+  purposes. Preserve unrelated work in the shared checkout.
 - Validate the change, push the issue branch, and open a PR targeting main.
-  Reference the issue and state the resulting behavior, validation performed,
-  and remaining risks or acceptance checks.
+  Reference every issue covered by the PR, distinguishing issues resolved from
+  those only partially addressed. State the resulting behavior, validation
+  performed, and remaining risks or acceptance checks. The representative branch
+  number does not limit the PR's issue coverage.
 - After the PR is actually merged, switch to its target branch (normally main)
   and update it from the remote before starting further work. Acceptance alone
   is not a completed merge. Preserve uncommitted or unrelated work when switching;
