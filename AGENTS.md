@@ -3,24 +3,54 @@
 These rules govern development of ordv, not how end users author Markdown or
 generate reading editions.
 
-## Required order
+## Choose the development path
 
-GitHub issue -> issue branch -> pull request -> independent decision -> merge.
+### Path 1: issue-driven work
 
-- Identify the issue before making development changes. If none exists, create
-  a focused issue first, or obtain an explicit user-requested exception.
+- Work undertaken to resolve a GitHub issue follows:
+  issue post -> issue branch -> commits and validation -> PR -> independent
+  decision -> merge. Identify the issue before starting its implementation.
 - Start an issue branch from current `origin/main`, normally named
   `codex/issue-<number>-<short-description>`. Reuse the existing issue branch and
-  PR when continuing its work. Do not commit development changes directly to main.
-- Do not create branches outside this pipeline unless the user explicitly
-  requests an exception. Read-only investigation needs no branch or PR.
+  PR when continuing its work. Do not resolve an issue by pushing directly to main.
 - Keep each PR focused on its issue. Combining issues requires explicit user
   direction. Preserve unrelated work in the shared checkout.
 - Validate the change, push the issue branch, and open a PR targeting main.
   Reference the issue and state the resulting behavior, validation performed,
   and remaining risks or acceptance checks.
+- After the PR is actually merged, switch to its target branch (normally main)
+  and update it from the remote before starting further work. Acceptance alone
+  is not a completed merge. Preserve uncommitted or unrelated work when switching;
+  never discard it to perform this step.
+
+### Path 2: internal session work
+
+- Changes that do not resolve a GitHub issue may be validated, committed on the
+  current branch, and pushed directly, including when that branch is main.
+  No issue, new branch, PR, or independent merge decision is required.
+- Internal maintenance such as updating this AGENTS.md can use this path. Do not
+  relabel issue-driven work as internal maintenance to bypass Path 1.
+- Direct work stays within the purpose of the current branch. If it would add
+  unrelated changes to an open issue PR, use an appropriate existing branch or
+  ask before creating a separate branch; preserve unrelated checkout state.
+- Do not create branches outside Path 1 unless the user explicitly requests it.
+  Read-only investigation needs no branch or PR.
+- Git tags may mark meaningful internal milestones when requested by the user;
+  they are not required for routine changes and do not replace PR review for
+  issue-driven work.
+
+### Future reference: sector branches (not used in ordv)
+
+A larger project could keep one long-lived branch per sector: merge the target
+branch into it, open a separately reviewed PR for each change, and continue on
+the sector branch afterward. This can group history without many branch names.
+This is only a reference, not permission to adopt that workflow here. Ordv uses
+the two paths above and returns to the target branch after a PR merge unless
+the user explicitly adopts a different policy.
 
 ## Independent merge decision
+
+These rules apply to PRs, not direct commits permitted by Path 2.
 
 - The implementing agent must not authorize its own PR for merge.
 - The user or a separate reviewing agent may authorize merging after inspecting
