@@ -1,0 +1,131 @@
+name: Runtime validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+        node: ['22', '24']
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      PYTHONUTF8: '1'
+      ORDV_CI_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+
+      - name: Set up Linux browser, Korean fonts, and Poppler
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes fonts-noto-cjk poppler-utils
+          test -x /usr/bin/google-chrome
+          echo "ORDV_BROWSER=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+          fc-match 'Noto Sans CJK KR'
+
+      - name: Set up Windows browser, Korean fonts, and Poppler
+        if: runner.os == 'Windows'
+        run: ./scripts/ci-windows-setup.ps1
+
+      - name: Install PDF inspection dependencies
+        run: python -m pip install pdfplumber==0.11.11
+
+      - name: Install locked npm dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build installed runtime and editor
+        run: ./scripts/ci-test.ps1 build
+
+      - name: Record runtime versions and actual Korean font
+        run: node scripts/ci-evidence.mjs versions
+
+      - name: Unit tests
+        run: ./scripts/ci-test.ps1 test
+
+      - name: Warm production install cache with registry access
+        run: node scripts/ci-warm-cache.mjs
+
+      - name: Packed production runtime acceptance
+        run: ./scripts/ci-test.ps1 test:runtime
+
+      - name: Installed local-agent wrapper acceptance
+        run: ./scripts/ci-test.ps1 test:agent
+
+      - name: PDF acceptance and saved UI fixture
+        if: matrix.node == '24'
+        run: ./scripts/ci-test.ps1 test:acceptance
+
+      - name: Editor acceptance using saved PDF fixture
+        if: matrix.node == '24'
+        run: ./scripts/ci-test.ps1 test:ui
+
+      - name: Table and figure layout acceptance
+        if: matrix.node == '24'
+        run: ./scripts/ci-test.ps1 test:layout
+
+      - name: Inspect installed PDF with Poppler
+        run: node scripts/ci-evidence.mjs pdf
+
+      - name: Upload synthetic runtime evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: runtime-${{ matrix.os }}-node-${{ matrix.node }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            output/ci/versions.json
+            output/ci/build.log
+            output/ci/test.log
+            output/ci/cache-bootstrap.log
+            output/ci/test-runtime.log
+            output/ci/test-agent.log
+            output/ci/test-acceptance.log
+            output/ci/test-ui.log
+            output/ci/test-layout.log
+            output/ci/pdf-inspection.json
+            output/runtime/ordv-*.tgz
+            output/runtime/installed-offline.pdf
+            output/agent/installed-agent.pdf
+            output/agent/evidence.json
+            output/acceptance/book.pdf
+            output/acceptance/documents.pdf
+            output/acceptance/html-images.pdf
+            output/acceptance/editor.png
+            output/acceptance/preview.png
+            output/acceptance/mobile.png
