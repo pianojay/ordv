@@ -89,7 +89,7 @@ Core modules live in `src/core`; `src/cli.ts` and `src/server.ts` expose them to
 
 ## Project direction
 
-The private source repository is [pianojay/ordv](https://github.com/pianojay/ordv). `npm run ordv -- ...` and the existing `npm run packet -- ...` invoke the same CLI. The original pitch in `docs/motive.md` remains archived unchanged.
+The source repository is [pianojay/ordv](https://github.com/pianojay/ordv). `npm run ordv -- ...` and the existing `npm run packet -- ...` invoke the same CLI. The original pitch in `docs/motive.md` remains archived unchanged.
 
 - [Product framing and real-workspace audit](docs/product-framing-audit.md)
 - [Agent integration implementation plan](docs/agent-integration-plan.md)
