@@ -1,10 +1,10 @@
 import type { Plan } from './model.js';
 
 export interface Frame { width: number; height: number; orientation: 'portrait' | 'landscape' }
-export function figureLayout(width: number, height: number, label: number, frames: Frame[]) {
-  const fits = frames.map(frame => ({ ...frame, scale: Math.min(1, frame.width / width, frame.height / height) }));
-  const single = fits.filter(f => f.scale * label >= 12).sort((a, b) => b.scale - a.scale)[0];
-  if (single) return { ...single, rows: 1, cols: 1, tiled: false };
+export function figureLayout(width: number, height: number, label: number | null, frames: Frame[]) {
+  const fits = frames.map(frame => ({ ...frame, scale: Math.min(1, frame.width / width, frame.height / height) })).sort((a, b) => b.scale - a.scale);
+  const single = fits[0];
+  if (label === null || single.scale * label >= 12) return { ...single, rows: 1, cols: 1, tiled: false };
   const scale = 12 / label;
   const candidates = fits.map(f => {
     const cols = Math.max(1, Math.ceil((width * scale / f.width - 0.1) / 0.9));
@@ -49,8 +49,9 @@ for(const source of document.querySelectorAll('.doc')){
   const w=vb?.width||node.naturalWidth,h=vb?.height||node.naturalHeight;
   if(!w||!h)continue;
   const sizes=svg?[...svg.querySelectorAll('text,foreignObject span,foreignObject p')].map(n=>parseFloat(getComputedStyle(n).fontSize)).filter(n=>n>0):[];
-  const label=sizes.length?Math.min(...sizes):16,rect=(svg||node).getBoundingClientRect();
-  if(Math.min(rect.width/w,rect.height/h)*label>=12&&rect.height<=frames[0].height&&rect.width<=frames[0].width)continue;
+  const label=svg?(sizes.length?Math.min(...sizes):16):null,rect=(svg||node).getBoundingClientRect();
+  const readable=label===null?w<=frames[0].width&&h<=frames[0].height:Math.min(rect.width/w,rect.height/h)*label>=12;
+  if(readable&&rect.height<=frames[0].height&&rect.width<=frames[0].width)continue;
   const layout=chooseLayout(w,h,label,frames);number++;
   if(layout.rows*layout.cols>24){window.packetErrors.push('Figure '+number+' needs more than 24 readable tiles; split the source diagram or choose Fit figures');continue;}
   const marker=document.createElement('span');node.before(marker);node.remove();
