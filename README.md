@@ -6,7 +6,7 @@
 
 ## Start
 
-Requires Node.js 22.12+ (tested with Node 24 on Windows).
+Requires Node.js 22.12+. Installed-runtime CI covers Node 22 and 24 on Windows and Ubuntu. For CLI and agent-skill installation, see [Install the CLI and reading skill](#install-the-cli-and-reading-skill).
 
 ```powershell
 npm ci
@@ -55,11 +55,11 @@ Puppeteer normally downloads Chromium during installation. To use an existing br
 ```powershell
 $env:PUPPETEER_SKIP_DOWNLOAD = 'true'
 npm ci
-$env:PACKET_BROWSER = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+$env:ORDV_BROWSER = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
 npm run dev
 ```
 
-Exports use a new temporary browser profile and close it after printing. This workstation's sandbox blocks Chromium launch; run the app from a normal terminal for PDF export. Chromium launch and both export modes were verified outside that sandbox.
+Exports use a new temporary browser profile and close it after printing. The execution environment must permit launching the browser. See [browser overrides and runtime requirements](docs/runtime.md) if printing cannot start.
 
 ## Saved plans and local service
 
@@ -96,7 +96,7 @@ The source repository is [pianojay/ordv](https://github.com/pianojay/ordv). `npm
 - [Style licensing and attribution review](docs/style-licensing.md)
 - [Reliability findings beyond page layout](docs/reliability-audit.md)
 
-Agent skill/MCP/plugin integrations are planned. The standalone VS Code styling preset is available by default. Follow-up work is tracked in [GitHub issues](https://github.com/pianojay/ordv/issues). The four original core defects have regression fixes; broader discovery, packaging, and reading controls remain separate work. Imported private lessons and generated PDFs are excluded from Git.
+The packaged `ordv-reading` skill and compact agent CLI are available. MCP transport and plugin distribution remain planned; the reading skill works without them. The standalone VS Code styling preset is available by default. Follow-up work is tracked in [GitHub issues](https://github.com/pianojay/ordv/issues). Imported private lessons and generated PDFs are excluded from Git.
 
 ## Default reading style
 
@@ -115,3 +115,85 @@ Tablet and duplex profiles provide annotation/binding space. Folded answers can 
 ## Installable CLI
 
 `npm run build && npm pack` produces an installable tarball with compiled CLI/core, UI, styling and notices. Install with `npm install -g /path/to/ordv-0.1.0.tgz`; `ordv` then runs from any directory. Existing outputs require `--force`. See [runtime and atomic output](docs/runtime.md).
+
+## Install the CLI and reading skill
+
+### Prerequisites
+
+- Git and Node.js 22.12+ with npm. The commands below build from this repository; an npm-registry release is not required.
+- Chrome, Edge, or Puppeteer's downloaded Chromium for PDF printing. If you skip the browser download, configure an installed browser as shown under [Browser setup](#browser-setup).
+- Fonts for your document languages. Windows normally includes Korean fonts; on Ubuntu, install `fonts-noto-cjk` when printing Korean material.
+- A local agent host that can execute commands. Personal skill discovery and natural-language invocation were verified with Codex CLI on Windows. Other desktop/plugin lifecycle checks remain separate.
+
+MCP, Python PDF inspection packages, and Poppler are not required to generate a packet. The latter tools are used by the development acceptance tests.
+
+### 1. Build and install the CLI
+
+Run these commands in PowerShell, bash, or zsh:
+
+```sh
+git clone https://github.com/pianojay/ordv.git
+cd ordv
+npm ci
+npm pack
+npm install --global ./ordv-0.1.0.tgz
+ordv --version
+```
+
+`npm pack` runs the production build automatically. Use the tarball filename it prints if the package version changes. If you already have a checkout, start from that directory instead of cloning again. Global npm installation uses your configured npm prefix; it does not require changing agent instructions.
+
+Open a new terminal if `ordv` is not found after installation, and check that your npm global executable directory is on `PATH`. You can then run `ordv --help` or `ordv open` from another directory. Linux also needs the browser's system libraries; see [runtime requirements](docs/runtime.md).
+
+### 2. Register the packaged skill
+
+The installed package contains `skills/ordv-reading/SKILL.md`, its command wrapper, and the operation reference. For Codex personal discovery, link that skill into `~/.agents/skills/ordv-reading`. Linking keeps the wrapper attached to the installed runtime and avoids a checkout-specific `ORDV_CLI` setting.
+
+On Windows, run this in PowerShell under the same account that runs Codex:
+
+```powershell
+$ordvPackage = Join-Path (npm root --global).Trim() 'ordv'
+$ordvSkillTarget = Join-Path $ordvPackage 'skills/ordv-reading'
+$personalSkillRoot = Join-Path $env:USERPROFILE '.agents/skills'
+$ordvSkillLink = Join-Path $personalSkillRoot 'ordv-reading'
+if (!(Test-Path -LiteralPath (Join-Path $ordvSkillTarget 'SKILL.md'))) {
+    throw 'Install the ordv tarball before registering its skill.'
+}
+if (Test-Path -LiteralPath $ordvSkillLink) {
+    throw 'An ordv-reading entry already exists. Preserve it and review its target before updating.'
+}
+New-Item -ItemType Directory -Path $personalSkillRoot -Force | Out-Null
+New-Item -ItemType Junction -Path $ordvSkillLink -Target $ordvSkillTarget
+```
+
+On Linux or macOS, the corresponding filesystem registration is:
+
+```sh
+ordv_package="$(npm root --global)/ordv"
+ordv_skill="$HOME/.agents/skills/ordv-reading"
+if [ ! -f "$ordv_package/skills/ordv-reading/SKILL.md" ]; then
+    printf '%s\n' 'Install the ordv tarball first.'
+elif [ -e "$ordv_skill" ] || [ -L "$ordv_skill" ]; then
+    printf '%s\n' 'Existing ordv-reading entry preserved. Review it before updating.'
+else
+    mkdir -p "$HOME/.agents/skills"
+    ln -s "$ordv_package/skills/ordv-reading" "$ordv_skill"
+fi
+```
+
+Windows personal registration has been tested. Linux runtime installation is covered by CI; the Linux/macOS skill-registration commands describe the equivalent symlink setup, not a completed host-acceptance test. macOS runtime acceptance is not yet recorded.
+
+If an entry already exists, inspect it before changing anything. The link target can also be a versioned user-local package installation rather than a global npm package. Keep that runtime installed while the skill points to it. Copying only the skill folder requires supplying `ORDV_CLI` as the absolute path to the installed `dist/cli.js`; see the [operation reference](docs/agent-editions.md).
+
+### 3. Verify in a fresh agent session
+
+Start a fresh Codex session so it can discover the personal skill. If an already-running desktop client still shows an old skill list, restart that client. Ask, for example:
+
+> $ordv-reading Create a reading packet from the Markdown notes in this workspace. Put the experiment before the background, exclude progress logs, and save the PDF and reading plan under output/reading.
+
+Supply your source and output folders if they are not clear from the session. The agent resolves the folders, selects and orders the documents, and calls the installed CLI. You do not need to provide snapshot JSON, special filenames, or front matter.
+
+Successful completion returns a PDF path, a saved-plan path, the selected order/settings, and diagnostics. Check that the requested documents are included, excluded references are explained, and source files remain unchanged. The saved plan can be reopened with `ordv open --plan /path/to/reading-plan.json`.
+
+The skill preserves source prose and uses captured snapshots for export. Public remote capture and replacing existing output require explicit permission. No MCP server, hooks, global agent instructions, or automatic document uploads are installed by this procedure.
+
+For development verification, [CI and evidence](docs/ci.md) describes the Windows/Linux matrix. `npm run test:runtime` checks the production-only package and `npm run test:agent` checks the packaged skill wrapper. Actual host invocation is a separate check from those scripted tests.
