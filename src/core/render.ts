@@ -92,7 +92,7 @@ function tocHTML(plan: Plan, hidden: Map<string, Set<string>>) {
       return `<li>${doc ? `<a href="${linkURL(destination(doc.id))}">${escape(n.title)}</a>` : `<strong>${escape(n.title)}</strong>`}${doc && plan.settings.tocDepth > 0 ? `<ul>${doc.headings.filter((h, i) => !hidden.get(doc.id)?.has(h.slug) && h.level <= plan.settings.tocDepth && !(i === 0 && h.level === 1 && h.text === doc.title)).map(h => `<li class="heading-entry" style="margin-left:${(h.level - 1) * 12}px"><a href="${linkURL(destination(doc.id, h.slug))}">${escape(h.text)}</a></li>`).join('')}</ul>` : ''}${n.children.length ? list(n.children) : ''}</li>`;
     }).join('')}</ul>`;
   }
-  return `<section class="navigation toc"><p class="source">MARKDOWN READING PACKET</p><h1>Contents</h1>${list(plan.tree)}</section>`;
+  return `<section class="navigation toc"><p class="source">MARKDOWN READING PACKET</p><h1>${escape(plan.title || 'Contents')}</h1>${plan.title ? '<h2>Contents</h2>' : ''}${list(plan.tree)}</section>`;
 }
 export function graphSVG(plan: Plan) {
   const ids = flatten(plan.tree), byId = new Map(plan.documents.map(d => [d.id, d]));

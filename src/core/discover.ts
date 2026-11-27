@@ -5,12 +5,14 @@ import { defaults, suggestedTree, snapshotMetadataHash, type Document, type Link
 import { hash, remote, within, githubBlob, safeFile, cachedFetcher, resolveReference, type Fetcher } from './io.js';
 import { checksum } from './checksum.js';
 
-export interface DiscoverOptions { root?: string; originRoot?: string; freshnessDays?: number; offline?: boolean; refresh?: boolean; maxDocuments?: number; maxDepth?: number; fetcher?: Fetcher; cacheDir?: string }
+export interface DiscoverOptions { root?: string; originRoot?: string; freshnessDays?: number; offline?: boolean; refresh?: boolean; maxDocuments?: number; maxDepth?: number; fetcher?: Fetcher; cacheDir?: string; followRemote?: boolean; includeSources?: string[]; signal?: AbortSignal }
 const markdownSource = (s: string) => /\.(md|markdown)$/i.test(remote(s) ? new URL(s).pathname : s);
 const extension = (s: string) => path.extname(remote(s) ? new URL(s).pathname : s).toLowerCase();
 const sourceKey = (s: string) => !remote(s) && process.platform === 'win32' ? s.toLowerCase() : s;
 const imageTypes: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 export async function discover(input: string, options: DiscoverOptions = {}): Promise<Plan> {
+  options.signal?.throwIfAborted();
+  if (remote(input) && options.followRemote === false) throw new Error('Remote following is disabled');
   const maxDocuments = options.maxDocuments ?? 500, maxDepth = options.maxDepth ?? 8;
   if (!Number.isInteger(maxDocuments) || maxDocuments < 1 || !Number.isInteger(maxDepth) || maxDepth < 0) throw new Error('Invalid discovery limits');
   if (options.offline && options.refresh) throw new Error('Offline discovery cannot refresh remote sources');
@@ -22,6 +24,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
     if (!(await fs.stat(root)).isDirectory() || !within(root, input)) throw new Error('Selected head/folder is outside the authorized root');
     seeds = directory ? await scan(input) : [input];
   }
+  if (options.includeSources) seeds = [...new Set(options.includeSources)];
   if (!seeds.length) throw new Error('No Markdown files found');
   const fetcher = options.fetcher ?? cachedFetcher(options.cacheDir ?? path.join(root, '.reading-packet', 'cache'), options.offline);
   const docs: Document[] = [], bySource = new Map<string, Document>(), warnings: string[] = [];
@@ -30,6 +33,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
   function reserve(bytes: number) { if (snapshotBytes + bytes > 60 * 1024 * 1024) throw new Error('Snapshot exceeds the 60 MB content/asset limit'); snapshotBytes += bytes; }
   const queue = seeds.map(source => ({ source, depth: 0 }));
   for (let at = 0; at < queue.length; at++) {
+    options.signal?.throwIfAborted();
     const { source, depth } = queue[at];
     if (bySource.has(sourceKey(source))) continue;
     if (docs.length >= maxDocuments) { warnings.push(`Discovery stopped at ${maxDocuments} documents`); break; }
@@ -38,6 +42,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
     try {
       let base = source, bytes: Buffer, fetchedAt: string | undefined, cached = false;
       if (remote(source)) {
+        if (options.followRemote === false) throw new Error('Remote following is disabled');
         const fetched = await fetcher(source, 5 * 1024 * 1024, !!options.refresh);
         if (fetched.type === 'text/html') throw new Error('HTML pages are references, not importable Markdown');
         bytes = fetched.data; base = fetched.url;
@@ -86,6 +91,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
             else if (link.kind === 'markdown') {
               link.target = hash(sourceKey(targetSource)).slice(0, 16);
               if (!remote(targetSource) && !within(root, targetSource)) link.issue = 'Target document is unavailable: file escapes the authorized root';
+              else if (remote(targetSource) && options.followRemote === false) link.issue = 'Remote following is disabled';
               else if (remote(targetSource) && depth >= maxDepth) link.issue = `Remote traversal depth limit (${maxDepth})`;
               else queue.push({ source: targetSource, depth: remote(targetSource) ? depth + 1 : depth });
             }
@@ -100,7 +106,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
           const resolved = resolveReference(base, href).source;
           if (!resolved) throw new Error('Unsupported image URL');
           let data: Buffer, type: string;
-          if (remote(resolved)) { const result = await fetcher(resolved, 15 * 1024 * 1024, !!options.refresh); data = result.data; type = result.type || imageTypes[extension(resolved)]; }
+          if (remote(resolved)) { if (options.followRemote === false) throw new Error('Remote following is disabled'); const result = await fetcher(resolved, 15 * 1024 * 1024, !!options.refresh); data = result.data; type = result.type || imageTypes[extension(resolved)]; }
           else { const file = await safeFile(root, resolved); if ((await fs.stat(file)).size > 15 * 1024 * 1024) throw new Error('Image exceeds 15 MB'); data = await fs.readFile(file); type = imageTypes[extension(file)]; }
           if (!Object.values(imageTypes).includes(type)) throw new Error('Unsupported image type');
           reserve(data.length);
@@ -140,7 +146,7 @@ export async function discover(input: string, options: DiscoverOptions = {}): Pr
   const head = directory ? candidates[0]?.id : docs[0].id;
   if (!head || !byId.get(head)?.available) throw new Error(`Cannot read the head document: ${docs[0]?.warnings.join('; ') || input}`);
   return { version: 2, createdAt: new Date().toISOString(), root, input, head, documents: docs, tree: suggestedTree(docs, head), candidates, settings: structuredClone(defaults), warnings,
-    discovery: { originRoot: options.originRoot, freshnessDays: options.freshnessDays ?? 30, maxDocuments, maxDepth } };
+    discovery: { originRoot: options.originRoot, freshnessDays: options.freshnessDays ?? 30, maxDocuments, maxDepth, followRemote: options.followRemote } };
 }
 
 /** Refresh explicitly; retain editorial choices and report removed selected sources. */
@@ -161,7 +167,7 @@ export async function refreshPlan(value: Plan, options: Pick<DiscoverOptions, 'f
   }
   const present = new Set(next.documents.map(d => d.id));
   for (const d of value.documents) if (!present.has(d.id)) next.documents.push({ ...d, available: false, warnings: ['Source no longer appears in refreshed discovery; remove it or rediscover explicitly'] });
-  next.tree = structuredClone(value.tree); next.head = value.head; next.settings = structuredClone(value.settings);
+  next.tree = structuredClone(value.tree); next.head = value.head; next.title = value.title; next.settings = structuredClone(value.settings);
   return next;
 }
 async function scan(root: string): Promise<string[]> {

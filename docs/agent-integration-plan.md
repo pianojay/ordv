@@ -1,6 +1,6 @@
 # ordv agent integration plan
 
-Status: implementation plan, 14 October 2026. The existing CLI and editor work; the skill, MCP adapter, and plugin described here are not implemented or installed.
+Status: CLI-first implementation, 28 November 2026. Compact local operations and a packaged reading skill are implemented in [agent editions](agent-editions.md). MCP, plugin distribution, cross-client parity, and installed host lifecycle remain planned. The sections below retain the broader integration design.
 
 ordv means **Ord(V)**: choose documents from the vertex set of a Markdown graph, then establish a reading order and optional hierarchy. An agent can make these editorial decisions using the user's request and its session context, while the standalone software handles snapshots, validation, rendering, and export.
 
@@ -23,7 +23,7 @@ Expose four operations through CLI JSON commands and a thin MCP adapter:
 | `preview_edition` | Edition ID/revision | Preview artifact and diagnostics. No source refresh. |
 | `export_edition` | Edition ID/revision; output path; optional explicit overwrite | PDF path or host-appropriate artifact link, page count, edition-manifest path, diagnostic summary, and completion status. |
 
-Use opaque collection/edition IDs and immutable revision checks. The agent should not edit the current large snapshot JSON manually. Translate compact source selections and section lists into the full internal plan in the core. Keep source identity separate from original host/path and local import location; store capture time and verified content/asset hashes.
+The CLI-first implementation uses absolute saved-plan paths as persistent collection/edition handles and SHA-256 of the complete saved plan as the revision. This keeps the GUI plan as the single state owner without a registry. The agent should not edit the current large snapshot JSON manually. Translate compact source selections and section lists into the full internal plan in the core. Keep source identity separate from original host/path and local import location; store capture time and verified content/asset hashes.
 
 Validate duplicate/missing IDs, empty selection, hierarchy cycles, stale revisions, destination paths, renderer availability, missing assets, malformed math, and diagrams before writing the final PDF. Write to a temporary file and atomically replace the target after success. Default to refusing overwrite. Return diagnostics with stable codes, severity, source, reference, and stage; source text stays data rather than agent instructions.
 

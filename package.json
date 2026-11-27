@@ -16,6 +16,7 @@
     "test:marginals": "tsx tests/marginals-acceptance.ts",
     "prepack": "npm run build",
     "test:runtime": "tsx tests/runtime-acceptance.ts",
+    "test:agent": "tsx tests/agent-acceptance.ts",
     "test:reading": "tsx tests/reading-acceptance.ts",
     "test:layout": "tsx tests/table-acceptance.ts && tsx tests/figure-acceptance.ts"
   },
@@ -59,7 +60,8 @@
     "./model": "./dist/core/model.js",
     "./render": "./dist/core/render.js",
     "./export": "./dist/core/export.js",
-    "./diagnostics": "./dist/core/diagnostics.js"
+    "./diagnostics": "./dist/core/diagnostics.js",
+    "./editions": "./dist/core/editions.js"
   },
   "engines": {
     "node": ">=22.12"
@@ -72,6 +74,8 @@
     "docs/runtime.md",
     "docs/reading.md",
     "docs/marginals.md",
-    "docs/style-licensing.md"
+    "docs/style-licensing.md",
+    "docs/agent-editions.md",
+    "skills/"
   ]
 }
