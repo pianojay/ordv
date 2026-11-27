@@ -19,7 +19,7 @@ it('keeps explicit scope separate from head and retains GitHub line links as ref
     const p = await discover(input, { root, originRoot: 'ssh://vilab204/home/user/docs' });
     expect(p.documents).toHaveLength(2);
     expect(p.documents[0].links[1]).toMatchObject({ kind: 'web', fragment: 'L3-L8' });
-    expect(p.documents[0].provenance).toMatchObject({ originalLocation: 'ssh://vilab204/home/user/docs/sub/head.md', importLocation: input, origin: 'user-provided' });
+    expect(p.documents[0].provenance).toMatchObject({ originalLocation: 'ssh://vilab204/home/user/docs/sub/head.md', importLocation: await fs.realpath(input), origin: 'user-provided' });
     expect(diagnosticRecords(p).some(d => d.code === 'BROKEN_ANCHOR')).toBe(true);
     await expect(discover(input, { root: path.join(root, 'elsewhere') })).rejects.toThrow();
     p.documents[1].role = 'evidence'; p.documents[1].freshness = 'superseded'; p.documents[1].supersededBy = 'new report';
