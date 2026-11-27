@@ -35,8 +35,8 @@ export const SettingsSchema = z.object({
   figures: z.enum(['fit', 'readable']).default('fit'),
   documentStyles: z.record(z.string(), z.object({ fontSize: z.number().min(8).max(24), marginMm: z.number().min(5).max(40).optional() })).default({})
 });
-export const PlanSchema = z.object({ version: z.union([z.literal(1), z.literal(2)]), createdAt: z.string(), root: z.string(), input: z.string(), head: z.string(), documents: z.array(DocumentSchema), tree: z.array(TreeSchema), candidates: z.array(z.object({ id: z.string(), title: z.string(), score: z.number(), reachable: z.number(), incoming: z.number() })), settings: SettingsSchema, warnings: z.array(z.string()),
-  discovery: z.object({ originRoot: z.string().optional(), freshnessDays: z.number().nonnegative().default(30), maxDocuments: z.number().int().positive().default(500), maxDepth: z.number().int().nonnegative().default(8) }).optional()
+export const PlanSchema = z.object({ version: z.union([z.literal(1), z.literal(2)]), title: z.string().optional(), createdAt: z.string(), root: z.string(), input: z.string(), head: z.string(), documents: z.array(DocumentSchema), tree: z.array(TreeSchema), candidates: z.array(z.object({ id: z.string(), title: z.string(), score: z.number(), reachable: z.number(), incoming: z.number() })), settings: SettingsSchema, warnings: z.array(z.string()),
+  discovery: z.object({ originRoot: z.string().optional(), freshnessDays: z.number().nonnegative().default(30), maxDocuments: z.number().int().positive().default(500), maxDepth: z.number().int().nonnegative().default(8), followRemote: z.boolean().optional() }).optional()
 });
 export type Plan = z.infer<typeof PlanSchema>;
 export const defaults = SettingsSchema.parse({});

@@ -9,10 +9,27 @@ import { excludeDocument } from './core/tree.js';
 import { atomicOutput } from './core/output.js';
 import { exportPDF } from './core/export.js';
 import { serve } from './server.js';
+import { runEditionOperation, editionFailure, EditionError } from './core/editions.js';
 
 const command = new Command().name('ordv').description('Turn linked Markdown into printable reading packets').version('0.1.0');
+const machineMode = process.argv[2] === 'agent';
+if (machineMode) command.exitOverride().configureOutput({ writeErr: () => {} });
 const cancellation = new AbortController();
 for (const name of ['SIGINT', 'SIGTERM'] as const) process.once(name, () => { cancellation.abort(new Error('Operation cancelled')); process.exitCode = name === 'SIGINT' ? 130 : 143; });
+command.command('agent').argument('<operation>', 'discover, create, inspect, preview, or export')
+  .requiredOption('--request <file>', 'Compact JSON request file, or - for stdin').action(async (operation, opts) => {
+    let source = '';
+    if (opts.request === '-') {
+      process.stdin.setEncoding('utf8');
+      for await (const chunk of process.stdin) { source += chunk.toString(); if (Buffer.byteLength(source) > 1024 * 1024) throw new EditionError('INVALID_REQUEST', 'Request exceeds 1 MB'); }
+    } else {
+      if ((await fs.stat(opts.request)).size > 1024 * 1024) throw new EditionError('INVALID_REQUEST', 'Request exceeds 1 MB');
+      source = await fs.readFile(opts.request, 'utf8');
+    }
+    const result = await runEditionOperation(operation, JSON.parse(source.replace(/^\uFEFF/, '')), { signal: cancellation.signal });
+    console.log(JSON.stringify(result));
+    if (!result.ok && !cancellation.signal.aborted) process.exitCode = 1;
+  });
 command.command('discover').argument('<source>', 'Markdown file, directory, or public raw Markdown URL').option('-o, --output <file>', 'Save a snapshot reading plan').option('--refresh', 'Refresh remote cached content')
   .option('--root <directory>', 'Explicit authorized root, independent of the head')
   .option('--origin-root <location>', 'Original host/path of transferred sources (user-provided)')
@@ -92,4 +109,9 @@ command.command('export').argument('<plan>', 'Saved JSON reading plan').required
   result.diagnostics.forEach(d => console.error(`${d.severity} [${d.code}]: ${d.message}`));
   console.log(`Exported ${opts.output} (${result.bytes.length} bytes)`);
 });
-command.parseAsync().catch(e => { console.error(`Error: ${e.message}`); if (!cancellation.signal.aborted) process.exitCode = 1; });
+command.parseAsync().catch(e => {
+  if (e.code === 'commander.helpDisplayed' || e.code === 'commander.version') return;
+  if (machineMode) console.log(JSON.stringify(editionFailure(process.argv[3] || 'unknown', e.code?.startsWith('commander.') ? new EditionError('INVALID_REQUEST', e.message) : e, cancellation.signal)));
+  else console.error(`Error: ${e.message}`);
+  if (!cancellation.signal.aborted) process.exitCode = 1;
+});
