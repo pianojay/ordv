@@ -89,12 +89,9 @@ Core modules live in `src/core`; `src/cli.ts` and `src/server.ts` expose them to
 
 ## Project direction
 
-The source repository is [pianojay/ordv](https://github.com/pianojay/ordv). `npm run ordv -- ...` and the existing `npm run packet -- ...` invoke the same CLI. The original pitch in `docs/motive.md` remains archived unchanged.
+The source repository is [pianojay/ordv](https://github.com/pianojay/ordv). `npm run ordv -- ...` and the existing `npm run packet -- ...` invoke the same CLI.
 
-- [Product framing and real-workspace audit](docs/product-framing-audit.md)
-- [Agent integration implementation plan](docs/agent-integration-plan.md)
 - [Style licensing and attribution review](docs/style-licensing.md)
-- [Reliability findings beyond page layout](docs/reliability-audit.md)
 
 The packaged `ordv-reading` skill and compact agent CLI are available. MCP transport and plugin distribution remain planned; the reading skill works without them. The standalone VS Code styling preset is available by default. Follow-up work is tracked in [GitHub issues](https://github.com/pianojay/ordv/issues). Imported private lessons and generated PDFs are excluded from Git.
 

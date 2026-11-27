@@ -4,3 +4,11 @@ dist/
 output/
 tmp/
 *.log
+
+# Local development records (not published).
+/docs/product-framing-audit.md
+/docs/reliability-audit.md
+/docs/followup-validation.md
+/docs/print-layout-validation.md
+/docs/agent-integration-plan.md
+/docs/motive.md
