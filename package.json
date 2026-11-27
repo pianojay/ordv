@@ -16,7 +16,8 @@
     "test:marginals": "tsx tests/marginals-acceptance.ts",
     "prepack": "npm run build",
     "test:runtime": "tsx tests/runtime-acceptance.ts",
-    "test:reading": "tsx tests/reading-acceptance.ts"
+    "test:reading": "tsx tests/reading-acceptance.ts",
+    "test:layout": "tsx tests/table-acceptance.ts && tsx tests/figure-acceptance.ts"
   },
   "dependencies": {
     "@noble/hashes": "^2.4.0",
